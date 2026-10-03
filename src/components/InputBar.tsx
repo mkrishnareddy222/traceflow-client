@@ -3,10 +3,12 @@ import { StyleSheet, View, TextInput, TouchableOpacity, Text } from 'react-nativ
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
+  theme: 'light' | 'dark'; // Injects dynamic design tokens tracking layer
 }
 
-export const InputBar: React.FC<InputBarProps> = ({ onSubmit }) => {
+export const InputBar: React.FC<InputBarProps> = ({ onSubmit, theme }) => {
   const [localQuery, setLocalQuery] = useState('');
+  const isDark = theme === 'dark';
 
   const handleTriggerSubmit = () => {
     if (!localQuery.trim()) return;
@@ -15,17 +17,27 @@ export const InputBar: React.FC<InputBarProps> = ({ onSubmit }) => {
   };
 
   return (
-    <View style={styles.inputContainer}>
+    <View style={[styles.inputContainer, { backgroundColor: isDark ? '#0d0d0d' : '#ffffff' }]}>
       <TextInput
-        style={styles.inputField}
+        style={[
+          styles.inputField,
+          { 
+            backgroundColor: isDark ? '#171717' : '#f4f4f4', 
+            borderColor: isDark ? '#262626' : '#e5e5e5',
+            color: isDark ? '#ececf1' : '#0d0d0d'
+          }
+        ]}
         placeholder="Message TraceFlow..."
-        placeholderTextColor="#525252"
+        placeholderTextColor={isDark ? '#525252' : '#a3a3a3'}
         value={localQuery}
         onChangeText={setLocalQuery}
         onSubmitEditing={handleTriggerSubmit}
       />
-      <TouchableOpacity style={styles.sendButton} onPress={handleTriggerSubmit}>
-        <Text style={styles.sendButtonText}>➔</Text>
+      <TouchableOpacity 
+        style={[styles.sendButton, { backgroundColor: isDark ? '#b4b4b4' : '#000000' }]} 
+        onPress={handleTriggerSubmit}
+      >
+        <Text style={[styles.sendButtonText, { color: isDark ? '#0d0d0d' : '#ffffff' }]}>➔</Text>
       </TouchableOpacity>
     </View>
   );
@@ -35,7 +47,6 @@ const styles = StyleSheet.create({
   inputContainer: { 
     flexDirection: 'row', 
     paddingVertical: 16, 
-    backgroundColor: '#0d0d0d', // Tied into the main dark canvas environment
     alignItems: 'center',
     maxWidth: 768,
     width: '100%',
@@ -44,22 +55,18 @@ const styles = StyleSheet.create({
   inputField: {
     flex: 1,
     height: 48,
-    backgroundColor: '#171717',
     borderRadius: 24,
     paddingHorizontal: 20,
-    color: '#ececf1',
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#262626'
   },
   sendButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#b4b4b4', // Softer, non-glare send button asset
     marginLeft: 12,
     justifyContent: 'center',
     alignItems: 'center'
   },
-  sendButtonText: { color: '#0d0d0d', fontSize: 16, fontWeight: 'bold' }
+  sendButtonText: { fontSize: 16, fontWeight: 'bold' }
 });

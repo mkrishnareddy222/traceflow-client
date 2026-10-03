@@ -5,7 +5,8 @@ export interface ChatPreferences {
   provider: 'groq' | 'openai' | 'gemini';
   temperature: number;
   maxTokens: number;
-  rememberConversation: boolean; // ADDED: Variable schema boolean tracking
+  rememberConversation: boolean;
+  theme: 'light' | 'dark'; // ARCHITECTURE TRACKER: Dynamic design token framework
   apiTokens: {
     groq: string;
     openai: string;
@@ -20,7 +21,8 @@ export function useChatEngine() {
     provider: 'groq',
     temperature: 0.7,
     maxTokens: 2048,
-    rememberConversation: true, // Default to true matching Streamlit configurations
+    rememberConversation: true,
+    theme: 'dark', // Defaults cleanly to our production darkness matrix
     apiTokens: { groq: '', openai: '', gemini: '' }
   });
 
@@ -39,35 +41,27 @@ export function useChatEngine() {
 
     try {
       const customToken = preferences.apiTokens[preferences.provider];
-
-      // Format past conversation data array to match pydantic history constraints
       const formattedHistory = messages.map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text
       }));
 
-      // Dispatch fetch payload completely synced with your Python backend SearchRequest schema
       const response = await fetch(BASE_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: promptText, 
-          // UPDATED: Dynamically links your new Switch state straight to request validation parameter
           remember: preferences.rememberConversation, 
           provider: preferences.provider,
           api_key_override: customToken || null, 
           temperature: preferences.temperature,
           top_p: 1.0, 
           max_tokens: preferences.maxTokens,
-          // If toggle is clicked off, pass a clean empty list array to clear context tracking loops
           history: preferences.rememberConversation ? formattedHistory : [] 
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Server returned error status code: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Server status crash: ${response.status}`);
       const jsonResponse = await response.json();
 
       if (jsonResponse && jsonResponse.content) {
@@ -78,7 +72,7 @@ export function useChatEngine() {
         );
       }
     } catch (error) {
-      console.error('TraceFlow Connection Failure:', error);
+      console.error('Connection fault:', error);
       setMessages((prevMessages) =>
         prevMessages.map((msg) =>
           msg.id === botMsgId ? { ...msg, text: 'Failed to establish connection to backend router.' } : msg
