@@ -10,7 +10,9 @@ import {
   TouchableOpacity,
   TextInput,
   Dimensions,
-  Switch // ADDED: Native toggle platform component
+  Switch,
+  Animated,
+  Easing // ADDED: Core physics easing curve component module
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useChatEngine } from './src/hooks/useChatEngine';
@@ -26,12 +28,26 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isMobile = windowWidth < 768;
 
+  const slideAnim = useRef(new Animated.Value(-260)).current;
+
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setWindowWidth(window.width);
     });
     return () => subscription.remove();
   }, []);
+
+  // CINEMATIC CURVE CONFIGURATION: Drastically slowed down transitions
+  useEffect(() => {
+    if (isMobile) {
+      Animated.timing(slideAnim, {
+        toValue: isMobileMenuOpen ? 0 : -260,
+        duration: 1100, // MODIFIED: Set to 1.1 seconds for an explicit luxury slow-motion effect
+        easing: Easing.bezier(0.25, 1, 0.5, 1), // Injects a premium ease-out velocity decelerator curve
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
+    }
+  }, [isMobileMenuOpen, isMobile]);
 
   const providers: Array<'groq' | 'openai' | 'gemini'> = ['groq', 'openai', 'gemini'];
 
@@ -47,7 +63,6 @@ export default function App() {
       <Text style={styles.sidebarTitle}>Workspace Options</Text>
       <View style={styles.divider} />
       
-      {/* 1. AI Provider Choice Layout */}
       <Text style={styles.inputLabel}>AI Provider</Text>
       <View style={styles.compactRow}>
         {providers.map((p) => (
@@ -63,7 +78,6 @@ export default function App() {
         ))}
       </View>
 
-      {/* 2. Token Field Parameters */}
       <TextInput
         style={styles.tokenInput}
         placeholder={`${preferences.provider.toUpperCase()} Override Token`}
@@ -73,7 +87,6 @@ export default function App() {
         onChangeText={handleTokenChange}
       />
 
-      {/* 3. Temperature Progress Controller */}
       <View style={styles.sliderLabelRow}>
         <Text style={styles.inputLabel}>Temperature</Text>
         <Text style={styles.sliderValueText}>{preferences.temperature.toFixed(1)}</Text>
@@ -90,7 +103,6 @@ export default function App() {
         thumbTintColor="#e5e5e5"
       />
 
-      {/* 4. Max Tokens Progress Controller */}
       <View style={styles.sliderLabelRow}>
         <Text style={styles.inputLabel}>Max Tokens</Text>
         <Text style={styles.sliderValueText}>{preferences.maxTokens}</Text>
@@ -107,16 +119,14 @@ export default function App() {
         thumbTintColor="#e5e5e5"
       />
 
-      {/* 5. ADDED CONTROL LAYER: Space-saving Switch for History Memory */}
       <View style={styles.toggleRow}>
         <View style={styles.toggleTextContainer}>
           <Text style={styles.toggleLabel}>Remember Context</Text>
-          <Text style={styles.toggleSubtitle}>Includes chat history in API search</Text>
+          <Text style={styles.toggleSubtitle}>Includes history logs inside data parameters</Text>
         </View>
         <Switch
           trackColor={{ false: '#2d2d2d', true: '#525252' }}
           thumbColor={preferences.rememberConversation ? '#ececf1' : '#a3a3a3'}
-          ios_backgroundColor="#2d2d2d"
           value={preferences.rememberConversation}
           onValueChange={(val) => setPreferences(prev => ({ ...prev, rememberConversation: val }))}
         />
@@ -141,16 +151,30 @@ export default function App() {
             </View>
           )}
 
-          {isMobile && isMobileMenuOpen && (
-            <TouchableOpacity 
-              style={styles.mobileDrawerOverlay} 
-              activeOpacity={1} 
-              onPress={() => setIsMobileMenuOpen(false)}
+          {isMobile && (
+            <View 
+              style={[
+                styles.mobileDrawerOverlay, 
+                { pointerEvents: isMobileMenuOpen ? 'auto' : 'none' } as any
+              ]}
             >
-              <View style={styles.mobileSidebar} onStartShouldSetResponder={() => true}>
+              {isMobileMenuOpen && (
+                <TouchableOpacity 
+                  style={styles.backdropTouch} 
+                  activeOpacity={1} 
+                  onPress={() => setIsMobileMenuOpen(false)} 
+                />
+              )}
+              
+              <Animated.View 
+                style={[
+                  styles.mobileSidebar, 
+                  { transform: [{ translateX: slideAnim }] }
+                ]}
+              >
                 {renderSidebarContent()}
-              </View>
-            </TouchableOpacity>
+              </Animated.View>
+            </View>
           )}
 
           <View style={styles.chatArea}>
@@ -201,8 +225,9 @@ const styles = StyleSheet.create({
   appLayout: { flex: 1, flexDirection: 'row' },
   
   desktopSidebar: { width: 260, backgroundColor: '#171717', borderRightWidth: 1, borderRightColor: '#222222' },
-  mobileDrawerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 999, flexDirection: 'row' },
-  mobileSidebar: { width: 260, height: '100%', backgroundColor: '#171717', borderRightWidth: 1, borderRightColor: '#222222' },
+  mobileDrawerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, flexDirection: 'row' },
+  backdropTouch: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)' },
+  mobileSidebar: { width: 260, height: '100%', backgroundColor: '#171717', borderRightWidth: 1, borderRightColor: '#222222', position: 'absolute', left: 0 },
   sidebarInner: { flex: 1, padding: 16 },
 
   sidebarTitle: { color: '#737373', fontWeight: '700', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
@@ -222,18 +247,15 @@ const styles = StyleSheet.create({
   sliderValueText: { color: '#ececf1', fontSize: 12, fontWeight: '700' },
   sliderBar: { width: '100%', height: 30, marginBottom: 4 },
 
-  // New ultra-compact Switch layout box row styles
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 4, width: '100%' },
   toggleTextContainer: { flex: 1, paddingRight: 8 },
   toggleLabel: { color: '#a3a3a3', fontSize: 12, fontWeight: '600' },
-  toggleSubtitle: { color: '#525252', fontSize: 10, marginTop: 2 },
-
-  chatArea: { flex: 1, backgroundColor: '#0d0d0d', paddingHorizontal: 0, paddingTop: 10 },
-  scrollContainer: { flex: 1 },
-  scrollContent: { paddingVertical: 12 },
-  scrollContentEmpty: { flexGrow: 1, justifyContent: 'center' },
-
-  welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
-  welcomeTitle: { color: '#ececf1', fontWeight: '700', textAlign: 'center' },
-  welcomeSubtitle: { color: '#a3a3a3', textAlign: 'center', marginTop: 12 }
+toggleSubtitle: { color: '#525252', fontSize: 10, marginTop: 2 },
+chatArea: { flex: 1, backgroundColor: '#0d0d0d', paddingHorizontal: 16, paddingTop: 10 },
+scrollContainer: { flex: 1 },
+scrollContent: { paddingVertical: 20 },
+scrollContentEmpty: { flexGrow: 1, justifyContent: 'center' },
+welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
+welcomeTitle: { color: '#ececf1', fontWeight: '700', textAlign: 'center' },
+welcomeSubtitle: { color: '#a3a3a3', textAlign: 'center', marginTop: 12 }
 });

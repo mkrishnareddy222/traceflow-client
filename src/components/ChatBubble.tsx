@@ -35,7 +35,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast }
         isUser ? styles.userDirection : styles.botDirection
       ]}>
         
-        {/* AVATAR ELEMENT */}
+        {/* AVATAR SYSTEM */}
         <View style={[
           styles.avatarCircle, 
           isUser ? styles.userAvatar : styles.botAvatar,
@@ -44,13 +44,13 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast }
           <Text style={styles.avatarText}>{isUser ? 'U' : 'T'}</Text>
         </View>
 
-        {/* TEXT TRACK BLOCK */}
+        {/* ALIGNMENT WORKSPACE CONTAINER */}
         <View style={[styles.textContainer, isUser ? styles.userAlign : styles.botAlign]}>
           {item.activeAgentStep && (
             <Text style={styles.agentTag}>◈ {item.activeAgentStep}</Text>
           )}
 
-          {/* CHAT BUBBLE PILL: Soft padding container matching ChatGPT parameters */}
+          {/* CHAT CONTAINER: Upgraded to Premium ChatGPT Dark Tint Capsule */}
           <View style={[isUser ? styles.userTextBubble : styles.botTextBubble]}>
             <View style={styles.markdownWrapper}>
               <Markdown style={isUser ? userMarkdownStyles : botMarkdownStyles}>
@@ -74,7 +74,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast }
 const styles = StyleSheet.create({
   rowContainer: {
     width: '100%',
-    paddingVertical: 10,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'center',
   },
@@ -88,19 +88,19 @@ const styles = StyleSheet.create({
   botDirection: { flexDirection: 'row' },
 
   avatarCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 4,
   },
-  userAvatarMargin: { marginLeft: 16 }, 
-  botAvatarMargin: { marginRight: 16 },
+  userAvatarMargin: { marginLeft: 14 }, 
+  botAvatarMargin: { marginRight: 14 },
   
-  userAvatar: { backgroundColor: '#4b5563' }, 
-  botAvatar: { backgroundColor: '#10b981' },  
-  avatarText: { color: '#ececf1', fontSize: 13, fontWeight: '700' },
+  userAvatar: { backgroundColor: '#374151' }, // Premium Slate Charcoal
+  botAvatar: { backgroundColor: '#10b981' }, // Vibrant Emerald Green 
+  avatarText: { color: '#ececf1', fontSize: 12, fontWeight: '700' },
 
   textContainer: {
     flex: 1,
@@ -108,20 +108,24 @@ const styles = StyleSheet.create({
   userAlign: { alignItems: 'flex-end' },
   botAlign: { alignItems: 'flex-start' },
 
-  // ChatGPT modern bubble specifications
+  // ============================================================
+  // UPGRADED DESIGN LAYER: Matches official ChatGPT parameters
+  // ============================================================
   userTextBubble: {
-    backgroundColor: '#2f2f2f', // Soft background shape block for user prompt
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)', // Translucent anti-glare mask tint
+    borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    maxWidth: '85%',
+    maxWidth: Platform.OS === 'web' ? '70%' : '85%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.03)', // Invisible micro-border line for crisp depth
   },
   botTextBubble: {
-    backgroundColor: 'transparent', // Assistant text flows completely un-bordered
+    backgroundColor: 'transparent', 
     width: '100%',
+    paddingTop: 2, // Slight vertical balancing shift
   },
 
-  // CRITICAL FIX: Changed to column flow layout to let content break downward perfectly
   markdownWrapper: { 
     flexDirection: 'column', 
     alignItems: 'flex-start',
@@ -131,16 +135,15 @@ const styles = StyleSheet.create({
   cursor: { color: '#ececf1', fontSize: 16, fontWeight: 'bold', marginTop: 4, alignSelf: 'flex-start' }
 });
 
-// Explicit plain-object markdown styling rules to override core package layouts safely
 const sharedMarkdownRules: Record<string, any> = {
-  body: { fontSize: 16, lineHeight: 26 },
+  body: { fontSize: 15, lineHeight: 24 }, // Clean anti-fatigue sizing metric
   strong: { fontWeight: 'bold' },
   bullet_list: { marginVertical: 4, paddingLeft: 10 },
   ordered_list: { marginVertical: 4, paddingLeft: 10 },
   list_item: { marginVertical: 2 },
   code_inline: { 
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', 
-    backgroundColor: '#1c1c1c', 
+    backgroundColor: '#1e1e1e', 
     paddingHorizontal: 5, 
     paddingVertical: 2,
     borderRadius: 4 
@@ -171,12 +174,12 @@ const sharedMarkdownRules: Record<string, any> = {
 
 const userMarkdownStyles: Record<string, any> = {
   ...sharedMarkdownRules,
-  body: { ...sharedMarkdownRules.body, color: '#ececf1', textAlign: 'left' }, 
-  strong: { ...sharedMarkdownRules.strong, color: '#ececf1' },
+  body: { ...sharedMarkdownRules.body, color: '#f3f4f6', textAlign: 'left' }, // Left-justified text inside capsule layout
+  strong: { ...sharedMarkdownRules.strong, color: '#ffffff' },
 };
 
 const botMarkdownStyles: Record<string, any> = {
   ...sharedMarkdownRules,
-  body: { ...sharedMarkdownRules.body, color: '#d4d4d4', textAlign: 'left' },
-  strong: { ...sharedMarkdownRules.strong, color: '#ececf1' },
+  body: { ...sharedMarkdownRules.body, color: '#d1d5db', textAlign: 'left' },
+  strong: { ...sharedMarkdownRules.strong, color: '#ffffff' },
 };

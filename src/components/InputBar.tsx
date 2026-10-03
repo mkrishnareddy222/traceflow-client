@@ -18,7 +18,7 @@ export const InputBar: React.FC<InputBarProps> = ({ onSubmit }) => {
     <View style={styles.inputContainer}>
       <TextInput
         style={styles.inputField}
-        placeholder="Message OmniChat..."
+        placeholder="Message TraceFlow..."
         placeholderTextColor="#525252"
         value={localQuery}
         onChangeText={setLocalQuery}
