@@ -270,11 +270,29 @@ toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 
 toggleTextContainer: { flex: 1, paddingRight: 8 },
 toggleLabel: { fontSize: 12, fontWeight: '600' },
 toggleSubtitle: { fontSize: 10, marginTop: 2 },
-chatArea: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
-scrollContainer: { flex: 1 },
+ chatArea: { 
+    flex: 1, 
+    paddingHorizontal: 16, 
+    paddingTop: 10,
+    // No maxWidth here, allowing the HeaderBar to stretch full-width safely
+  },
+  scrollContainer: { 
+    flex: 1,
+    maxWidth: 720,        // 1. Locks the conversation text stream column size
+    width: '100%',
+    alignSelf: 'center',  // 2. Centers the chat logs directly in the middle of the workspace
+  },
+  welcomeContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    maxWidth: 580,        // 3. Compresses the welcome text slightly so it reads beautifully
+    alignSelf: 'center', 
+    width: '100%' 
+  },
 scrollContent: { paddingVertical: 20 },
 scrollContentEmpty: { flexGrow: 1, justifyContent: 'center' },
-welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
+//welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
 welcomeTitle: { fontWeight: '700', textAlign: 'center' },
 welcomeSubtitle: { textAlign: 'center', marginTop: 12 }
 });
