@@ -1,18 +1,5 @@
 import { useState } from 'react';
-import { Message } from '../types/chat';
-
-export interface ChatPreferences {
-  provider: 'groq' | 'openai' | 'gemini';
-  temperature: number;
-  maxTokens: number;
-  rememberConversation: boolean;
-  theme: 'light' | 'dark'; // ARCHITECTURE TRACKER: Dynamic design token framework
-  apiTokens: {
-    groq: string;
-    openai: string;
-    gemini: string;
-  };
-}
+import { Message, ChatPreferences } from '../types/chat';
 
 export function useChatEngine() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -22,21 +9,22 @@ export function useChatEngine() {
     temperature: 0.7,
     maxTokens: 2048,
     rememberConversation: true,
-    theme: 'dark', // Defaults cleanly to our production darkness matrix
-    apiTokens: { groq: '', openai: '', gemini: '' }
+    theme: 'dark',
+    ragEnabled: false,
+    ragProvider: 'cohere',
+    apiTokens: { groq: '', openai: '', gemini: '', cohere: '' }
   });
 
-  const BASE_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api/search';
+  const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const sendMessage = async (promptText: string) => {
-    if (!promptText.trim()) return;
+  const sendMessage = async (promptText: string, attachedFiles: any[] = []) => {
+    if (!promptText.trim() && attachedFiles.length === 0) return;
 
     const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: promptText };
     const botMsgId = (Date.now() + 1).toString();
     const botMsg: Message = { id: botMsgId, sender: 'bot', text: 'Thinking...' };
 
-    const updatedMessages = [...messages, userMsg];
-    setMessages([...updatedMessages, botMsg]);
+    setMessages((prev) => [...prev, userMsg, botMsg]);
     setIsTyping(true);
 
     try {
@@ -46,7 +34,12 @@ export function useChatEngine() {
         content: msg.text
       }));
 
-      const response = await fetch(BASE_API_URL, {
+      // DUAL ROUTING LOGIC: Call dedicated paths based on user selection state
+      const targetEndpoint = preferences.ragEnabled 
+        ? `${BASE_URL}/api/rag/search`  // RAG Endpoint
+        : `${BASE_URL}/api/search`;     // Standard Base Endpoint
+
+      const response = await fetch(targetEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -57,37 +50,33 @@ export function useChatEngine() {
           temperature: preferences.temperature,
           top_p: 1.0, 
           max_tokens: preferences.maxTokens,
-          history: preferences.rememberConversation ? formattedHistory : [] 
+          history: preferences.rememberConversation ? formattedHistory : [],
+          // Pass downstream parameters conditionally if RAG switch triggers active
+          ...(preferences.ragEnabled ? {
+            rag_provider: preferences.ragProvider,
+            rag_token: preferences.apiTokens.cohere || null,
+            files: attachedFiles.map(f => f.name)
+          } : {})
         }),
       });
 
-      if (!response.ok) throw new Error(`Server status crash: ${response.status}`);
+      if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
       const jsonResponse = await response.json();
 
       if (jsonResponse && jsonResponse.content) {
         setMessages((prevMessages) =>
-          prevMessages.map((msg) =>
-            msg.id === botMsgId ? { ...msg, text: jsonResponse.content } : msg
-          )
+          prevMessages.map((msg) => msg.id === botMsgId ? { ...msg, text: jsonResponse.content } : msg)
         );
       }
     } catch (error) {
       console.error('Connection fault:', error);
       setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg.id === botMsgId ? { ...msg, text: 'Failed to establish connection to backend router.' } : msg
-        )
+        prevMessages.map((msg) => msg.id === botMsgId ? { ...msg, text: 'Failed to establish connection to target endpoint.' } : msg)
       );
     } finally {
       setIsTyping(false);
     }
   };
 
-  return {
-    messages,
-    isTyping,
-    preferences,
-    setPreferences,
-    sendMessage,
-  };
+  return { messages, isTyping, preferences, setPreferences, sendMessage };
 }

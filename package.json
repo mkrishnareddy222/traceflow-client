@@ -5,6 +5,7 @@
   "dependencies": {
     "@react-native-community/slider": "5.2.0",
     "expo": "~57.0.26",
+    "expo-document-picker": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -14,12 +15,15 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
-"scripts": {
-  "start": "expo start",
-  "build": "expo export --platform web", 
-  "web": "expo start --web"
-},
+  "scripts": {
+    "start": "expo start",
+    "build": "expo export --platform web",
+    "web": "expo start --web",
+    "lint": "expo lint"
+  },
   "private": true
 }

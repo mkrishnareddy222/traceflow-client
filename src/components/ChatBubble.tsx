@@ -7,7 +7,7 @@ interface ChatBubbleProps {
   item: Message;
   isTyping: boolean;
   isLast: boolean;
-  theme: 'light' | 'dark'; // Instantly reads state transformations mapping down
+  theme: 'light' | 'dark'; // Dynamic design token interface parameter pass
 }
 
 export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast, theme }) => {
@@ -28,17 +28,21 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast, 
     } else {
       cursorOpacity.setValue(1);
     }
-  }, [showCursor]);
+  }, [showCursor, cursorOpacity]);
 
-  // Construct functional dynamic markdown color token maps variables inline
+  // Dynamic Markdown Style Lookup Selector Map Layer
   const activeMarkdownTheme = isUser 
     ? (isDark ? userMarkdownDark : userMarkdownLight) 
     : (isDark ? botMarkdownDark : botMarkdownLight);
 
   return (
     <View style={styles.rowContainer}>
-      <View style={[styles.messageContentBlock, isUser ? styles.userDirection : styles.botDirection]}>
+      <View style={[
+        styles.messageContentBlock, 
+        isUser ? styles.userDirection : styles.botDirection
+      ]}>
         
+        {/* AVATAR SYSTEM MODULE */}
         <View style={[
           styles.avatarCircle, 
           isUser ? styles.userAvatar : styles.botAvatar,
@@ -47,12 +51,13 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast, 
           <Text style={styles.avatarText}>{isUser ? 'U' : 'T'}</Text>
         </View>
 
+        {/* ALIGNMENT WORKSPACE CONTAINER */}
         <View style={[styles.textContainer, isUser ? styles.userAlign : styles.botAlign]}>
           {item.activeAgentStep && (
             <Text style={[styles.agentTag, { color: isDark ? '#525252' : '#a3a3a3' }]}>◈ {item.activeAgentStep}</Text>
           )}
 
-          {/* DYNAMIC LOOKUP: Swaps text bubble containers dynamically depending on active state settings */}
+          {/* DYNAMIC LOOKUP: Conditional design skin selection logic mapping */}
           <View style={[
             isUser ? (isDark ? styles.userBubbleDark : styles.userBubbleLight) : styles.botBubble
           ]}>
@@ -90,9 +95,29 @@ const styles = StyleSheet.create({
   userAlign: { alignItems: 'flex-end' },
   botAlign: { alignItems: 'flex-start' },
 
-  // Theme Specific Dynamic Bubble Shell Maps
-  userBubbleDark: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 10, maxWidth: '85%' },
-  userBubbleLight: { backgroundColor: '#f4f4f4', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 10, maxWidth: '85%', borderWidth: 1, borderColor: '#e5e5e5' },
+  // ============================================================
+  // BRAND STYLING SUITE: Light Purple Accent Tone Contracts
+  // ============================================================
+  userBubbleDark: { 
+    backgroundColor: '#2e1065',       // Deep Royal Velvet Purple for Dark Mode
+    borderRadius: 18, 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    maxWidth: Platform.OS === 'web' ? '70%' : '85%',
+    borderWidth: 1,
+    borderColor: '#4c1d95'            // Rich Purple outline depth line accent
+  },
+  userBubbleLight: { 
+    backgroundColor: '#f3e8ff',      // Soft Pastel Light Lavender Purple for Light Mode
+    borderRadius: 18, 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    maxWidth: Platform.OS === 'web' ? '70%' : '85%', 
+    borderWidth: 1, 
+    borderColor: '#e9d5ff'            // Clean Lavender border edge line accent
+  },
+  
+  // Assistant response track retains flat, zero border minimalist properties
   botBubble: { backgroundColor: 'transparent', width: '100%', paddingTop: 2 },
 
   markdownWrapper: { flexDirection: 'column', alignItems: 'flex-start', width: '100%' },
@@ -100,15 +125,25 @@ const styles = StyleSheet.create({
   cursor: { fontSize: 16, fontWeight: 'bold', marginTop: 4, alignSelf: 'flex-start' }
 });
 
-// Markdown Syntax Maps Layout Configs
+// Markdown Syntax Styling Maps Rules (Plain JavaScript configurations)
 const sharedMarkdownRules = {
   body: { fontSize: 15, lineHeight: 24 },
   strong: { fontWeight: 'bold' as const },
   bullet_list: { marginVertical: 4, paddingLeft: 10 },
   ordered_list: { marginVertical: 4, paddingLeft: 10 },
+  list_item: { marginVertical: 2 },
 };
 
-const userMarkdownDark = { ...sharedMarkdownRules, body: { ...sharedMarkdownRules.body, color: '#f3f4f6' } };
-const userMarkdownLight = { ...sharedMarkdownRules, body: { ...sharedMarkdownRules.body, color: '#0d0d0d' } };
-const botMarkdownDark = { ...sharedMarkdownRules, body: { ...sharedMarkdownRules.body, color: '#d1d5db' }, code_inline: { backgroundColor: '#1e1e1e', color: '#ececf1', padding: 2, borderRadius: 4 } };
-const botMarkdownLight = { ...sharedMarkdownRules, body: { ...sharedMarkdownRules.body, color: '#1f2937' }, code_inline: { backgroundColor: '#f3f4f6', color: '#1f2937', padding: 2, borderRadius: 4 } };
+// Target font color balances configured to retain strong typography contrast ratios
+const userMarkdownDark = { ...sharedMarkdownRules, body: { ...sharedMarkdownRules.body, color: '#f5f3ff' } };
+const userMarkdownLight = { ...sharedMarkdownRules, body: { ...sharedMarkdownRules.body, color: '#581c87' } }; // Deep indigo-purple text for crisp text visibility
+const botMarkdownDark = { 
+  ...sharedMarkdownRules, 
+  body: { ...sharedMarkdownRules.body, color: '#d1d5db' }, 
+  code_inline: { backgroundColor: '#1e1e1e', color: '#ececf1', padding: 2, borderRadius: 4 } 
+};
+const botMarkdownLight = { 
+  ...sharedMarkdownRules, 
+  body: { ...sharedMarkdownRules.body, color: '#1f2937' }, 
+  code_inline: { backgroundColor: '#f3f4f6', color: '#1f2937', padding: 2, borderRadius: 4 } 
+};
