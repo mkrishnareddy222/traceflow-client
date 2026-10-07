@@ -1,25 +1,54 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Text, ScrollView } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker'; // Import Native Picker Component
 import { UploadedFile } from '../types/chat';
 
 interface InputBarProps {
-  onSubmit: (text: string, files: UploadedFile[]) => void;
+  onSubmit: (text: string) => void;
+  uploadFileToServer: (fileObj: { uri: string; name: string; type: string, blob?: any }) => Promise<UploadedFile | null>;
   theme: 'light' | 'dark';
-  ragEnabled: boolean; // Dynamic control parameter pass
+  ragEnabled: boolean;
+  isFileUploading: boolean;
 }
 
-export const InputBar: React.FC<InputBarProps> = ({ onSubmit, theme, ragEnabled }) => {
+export const InputBar: React.FC<InputBarProps> = ({ onSubmit, uploadFileToServer, theme, ragEnabled, isFileUploading }) => {
   const [localQuery, setLocalQuery] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<UploadedFile[]>([]);
   const isDark = theme === 'dark';
 
-  const handleSimulateFileUpload = () => {
-    const mockFile: UploadedFile = {
-      id: Date.now().toString(),
-      name: `kb_doc_${Math.floor(Math.random() * 100)}.pdf`,
-      size: '1.8 MB'
-    };
-    setAttachedFiles(prev => [...prev, mockFile]);
+  const handleDocumentSelectionTrigger = async () => {
+    try {
+      // Launch standard OS file selection window
+      const pickerResult = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        copyToCacheDirectory: true,
+      });
+
+      // Stop execution if user backs out or cancels selection
+      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+        return;
+      }
+
+      const selectedAsset = pickerResult.assets[0];
+
+      // Extract metadata securely matching your hook contract structures
+      const targetFilePayload = {
+        uri: selectedAsset.uri,
+        name: selectedAsset.name,
+        type: selectedAsset.mimeType || 'application/pdf',
+        // CRITICAL WEB FIX: Capture raw file structure directly if running on browser thread
+        blob: (selectedAsset as any).output?.[0] || selectedAsset
+      };
+
+      // TRIGGER EXTENSION MULTIPART FORM REST ROUTING IN Hook
+      const syncedFileResult = await uploadFileToServer(targetFilePayload);
+      
+      if (syncedFileResult) {
+        setAttachedFiles(prev => [...prev, syncedFileResult]);
+      }
+    } catch (err) {
+      console.error('Document picking error event sequence:', err);
+    }
   };
 
   const handleRemoveFile = (id: string) => {
@@ -27,8 +56,8 @@ export const InputBar: React.FC<InputBarProps> = ({ onSubmit, theme, ragEnabled 
   };
 
   const handleTriggerSubmit = () => {
-    if (!localQuery.trim() && attachedFiles.length === 0) return;
-    onSubmit(localQuery.trim(), attachedFiles);
+    if (!localQuery.trim()) return;
+    onSubmit(localQuery.trim());
     setLocalQuery('');
     setAttachedFiles([]);
   };
@@ -42,7 +71,7 @@ export const InputBar: React.FC<InputBarProps> = ({ onSubmit, theme, ragEnabled 
             {attachedFiles.map(file => (
               <View key={file.id} style={[styles.filePill, { backgroundColor: isDark ? '#222222' : '#f0f0f0' }]}>
                 <Text style={[styles.fileNameText, { color: isDark ? '#ececf1' : '#0d0d0d' }]} numberOfLines={1}>
-                  📄 {file.name}
+                  🟢 {file.name} (Indexed)
                 </Text>
                 <TouchableOpacity onPress={() => handleRemoveFile(file.id)} style={styles.removeFileBtn}>
                   <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 12 }}>×</Text>
@@ -55,25 +84,32 @@ export const InputBar: React.FC<InputBarProps> = ({ onSubmit, theme, ragEnabled 
 
       <View style={[styles.inputBoxShell, { backgroundColor: isDark ? '#171717' : '#f4f4f4', borderColor: isDark ? '#262626' : '#e5e5e5' }]}>
         
-        {/* CONDITIONAL RAG BUTTON: Render if and only if RAG switch is active */}
         {ragEnabled && (
-          <TouchableOpacity style={styles.attachButton} onPress={handleSimulateFileUpload}>
-            <Text style={{ color: isDark ? '#b4b4b4' : '#000000', fontSize: 18, fontWeight: '600' }}>+</Text>
+          <TouchableOpacity 
+            style={[styles.attachButton, isFileUploading && { opacity: 0.4 }]} 
+            onPress={handleDocumentSelectionTrigger}
+            disabled={isFileUploading}
+          >
+            <Text style={{ color: isDark ? '#b4b4b4' : '#000000', fontSize: 18, fontWeight: '600' }}>
+              {isFileUploading ? '⌛' : '+'}
+            </Text>
           </TouchableOpacity>
         )}
 
         <TextInput
           style={[styles.inputField, { color: isDark ? '#ececf1' : '#0d0d0d' }]}
-          placeholder={ragEnabled ? "Message TraceFlow with files context..." : "Message TraceFlow..."}
+          placeholder={isFileUploading ? "Indexing database asset onto disk storage..." : "Message TraceFlow..."}
           placeholderTextColor={isDark ? '#525252' : '#a3a3a3'}
           value={localQuery}
           onChangeText={setLocalQuery}
           onSubmitEditing={handleTriggerSubmit}
+          editable={!isFileUploading}
         />
 
         <TouchableOpacity 
-          style={[styles.sendButton, { backgroundColor: isDark ? '#b4b4b4' : '#000000' }]} 
+          style={[styles.sendButton, { backgroundColor: isDark ? '#b4b4b4' : '#000000' }, isFileUploading && { opacity: 0.5 }]} 
           onPress={handleTriggerSubmit}
+          disabled={isFileUploading}
         >
           <Text style={[styles.sendButtonText, { color: isDark ? '#0d0d0d' : '#ffffff' }]}>➔</Text>
         </TouchableOpacity>

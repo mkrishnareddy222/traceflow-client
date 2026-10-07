@@ -17,10 +17,19 @@ import { ChatBubble } from './src/components/ChatBubble';
 import { InputBar } from './src/components/InputBar';
 import { HeaderBar } from './src/components/HeaderBar';
 import { SidebarOptions } from './src/components/SidebarOptions';
-import { UploadedFile } from './src/types/chat';
 
 export default function App() {
-  const { messages, isTyping, preferences, setPreferences, sendMessage } = useChatEngine();
+  // FIXED DESTRUCTURING: Safely pulls missing variables from the updated useChatEngine contract
+  const { 
+    messages, 
+    isTyping, 
+    isFileUploading, 
+    preferences, 
+    setPreferences, 
+    sendMessage, 
+    uploadFileToServer 
+  } = useChatEngine();
+  
   const scrollViewRef = useRef<ScrollView>(null);
   
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -95,7 +104,14 @@ export default function App() {
               )}
             </ScrollView>
 
-            <InputBar onSubmit={sendMessage} theme={preferences.theme} ragEnabled={preferences.ragEnabled} />
+            {/* FIXED CALL: Forwarding all props and async callbacks into InputBar */}
+            <InputBar 
+              onSubmit={sendMessage} 
+              uploadFileToServer={uploadFileToServer}
+              theme={preferences.theme} 
+              ragEnabled={preferences.ragEnabled} 
+              isFileUploading={isFileUploading}
+            />
           </View>
 
         </View>
@@ -113,12 +129,7 @@ const styles = StyleSheet.create({
   backdropTouch: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)' },
   mobileSidebar: { width: 260, height: '100%', borderRightWidth: 1, position: 'absolute', left: 0 },
   chatArea: { flex: 1, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, width: '100%' },
-   scrollContainer: { 
-    flex: 1,
-    maxWidth: 720,        // Locks the text conversation streams cleanly to a standard column size
-    width: '100%',
-    alignSelf: 'center',  // Centers the scrolling chat bubbles horizontally down the vertical spine of the page
-  },
+  scrollContainer: { flex: 1, maxWidth: 720, width: '100%', alignSelf: 'center' },
   scrollContent: { paddingVertical: 20 },
   scrollContentEmpty: { flexGrow: 1, justifyContent: 'center' },
   welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
