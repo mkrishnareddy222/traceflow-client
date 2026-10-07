@@ -123,13 +123,46 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboardContainer: { flex: 1 },
+  scrollContainer: { 
+    flex: 1,
+    maxWidth: 720,        
+    width: '100%',
+    alignSelf: 'center',  
+    
+    // ============================================================
+    // ARCHITECT FIX: Custom CSS scrollbar styles for web platforms
+    // ============================================================
+    ...Platform.select({
+      web: {
+        // Sets scrollbar styling for Chrome, Safari, and newer Edge browsers
+        scrollbarWidth: 'thin',                 // Firefox support
+        scrollbarColor: '#2f2f2f transparent',  // Firefox thumb and track colors
+        
+        // Custom CSS strings passed into standard web styling
+        '::-webkit-scrollbar': {
+          width: 8,                             // Keeps the scrollbar sleek and thin
+        },
+        '::-webkit-scrollbar-track': {
+          backgroundColor: 'transparent',       // Blends the scrollbar background track away
+        },
+        '::-webkit-scrollbar-thumb': {
+          backgroundColor: '#2f2f2f',           // Subtle charcoal thumb color matching ChatGPT
+          borderRadius: 4,                      // Smooth rounded edges
+        },
+        '::-webkit-scrollbar-thumb:hover': {
+          backgroundColor: '#4f4f4f',           // Darkens slightly when hovered
+        },
+      } as any,
+      default: {},
+    }),
+  },
   appLayout: { flex: 1, flexDirection: 'row' },
   desktopSidebar: { width: 260, borderRightWidth: 1 },
   mobileDrawerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, flexDirection: 'row' },
   backdropTouch: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)' },
   mobileSidebar: { width: 260, height: '100%', borderRightWidth: 1, position: 'absolute', left: 0 },
   chatArea: { flex: 1, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, width: '100%' },
-  scrollContainer: { flex: 1, maxWidth: 720, width: '100%', alignSelf: 'center' },
+  //scrollContainer: { flex: 1, maxWidth: 720, width: '100%', alignSelf: 'center' },
   scrollContent: { paddingVertical: 20 },
   scrollContentEmpty: { flexGrow: 1, justifyContent: 'center' },
   welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
