@@ -1,6 +1,50 @@
 import { useState } from 'react';
 import { Platform } from 'react-native';
-import { Message, ChatPreferences, UploadedFile, ProcessingStep } from '../types/chat';
+import { Message, ChatPreferences, UploadedFile, ProcessingStep, SourceMetadata } from '../types/chat';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const readSourceMetadata = (value: unknown): SourceMetadata | null => {
+  if (!isRecord(value)) return null;
+
+  const metadata = isRecord(value.metadata) ? value.metadata : value;
+  const sourceName = metadata.source ?? metadata.filename ?? metadata.file_name ?? metadata.document_name;
+  if (typeof sourceName !== 'string') return null;
+
+  return {
+    source: sourceName,
+    ...(typeof metadata.session_id === 'string' && { session_id: metadata.session_id }),
+    ...(typeof metadata.file_type === 'string' && { file_type: metadata.file_type }),
+    ...((typeof metadata.page_number === 'number' || typeof metadata.page_number === 'string') && {
+      page_number: metadata.page_number,
+    }),
+    ...(typeof metadata.uploaded_at === 'string' && { uploaded_at: metadata.uploaded_at }),
+    ...((typeof metadata.chunk_number === 'number' || typeof metadata.chunk_number === 'string') && {
+      chunk_number: metadata.chunk_number,
+    }),
+  };
+};
+
+const readResponseSources = (response: unknown, content: string): SourceMetadata[] => {
+  if (!isRecord(response)) return [];
+
+  const sourceData = response.sources ?? response.source_documents ?? response.citations ?? response.metadata;
+  const candidates = (Array.isArray(sourceData) ? sourceData : [sourceData])
+    .map(readSourceMetadata)
+    .filter((source): source is SourceMetadata => source !== null);
+
+  if (candidates.length > 0) return candidates;
+
+  return Array.from(content.matchAll(/【([^】]+)】/g), ([, citation]) => {
+    const [sourceName, ...details] = citation.split('|').map((detail) => detail.trim());
+    const chunk = details.join(' ').match(/\bchunk\s*:\s*(\d+)/i)?.[1];
+    return {
+      source: sourceName,
+      ...(chunk && { chunk_number: chunk }),
+    };
+  }).filter((source) => source.source.length > 0);
+};
 
 export function useChatEngine() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -124,8 +168,15 @@ export function useChatEngine() {
       const jsonResponse = await response.json();
 
       if (jsonResponse && jsonResponse.content) {
+        const sources = preferences.ragEnabled
+          ? readResponseSources(jsonResponse, jsonResponse.content)
+          : undefined;
         setMessages((prevMessages) =>
-          prevMessages.map((msg) => msg.id === botMsgId ? { ...msg, text: jsonResponse.content } : msg)
+          prevMessages.map((msg) =>
+            msg.id === botMsgId
+              ? { ...msg, text: jsonResponse.content, ...(sources?.length && { sources }) }
+              : msg
+          )
         );
       }
     } catch (error) {

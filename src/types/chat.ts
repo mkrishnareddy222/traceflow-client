@@ -3,6 +3,16 @@ export interface Message {
   sender: 'user' | 'bot';
   text: string;
   activeAgentStep?: string; 
+  sources?: SourceMetadata[];
+}
+
+export interface SourceMetadata {
+  source: string;
+  session_id?: string;
+  file_type?: string;
+  page_number?: number | string;
+  uploaded_at?: string;
+  chunk_number?: number | string;
 }
 
 export interface UploadedFile {

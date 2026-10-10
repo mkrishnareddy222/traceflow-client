@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Platform, Animated, Text } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import { Message } from '../types/chat';
+import { Message, SourceMetadata } from '../types/chat';
 
 interface ChatBubbleProps {
   item: Message;
@@ -65,6 +65,20 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ item, isTyping, isLast, 
               <Markdown style={activeMarkdownTheme}>
                 {item.text}
               </Markdown>
+
+              {item.sources && item.sources.length > 0 && (
+                <View style={[styles.sources, { borderTopColor: isDark ? '#2f2f2f' : '#e5e7eb' }]}>
+                  <Text style={[styles.sourcesTitle, { color: isDark ? '#a3a3a3' : '#6b7280' }]}>Sources</Text>
+                  {item.sources.map((source, index) => (
+                    <Text
+                      key={`${source.source}-${source.page_number ?? index}`}
+                      style={[styles.sourceText, { color: isDark ? '#9ca3af' : '#6b7280' }]}
+                    >
+                      {formatSourceMetadata(source)}
+                    </Text>
+                  ))}
+                </View>
+              )}
               
               {showCursor && (
                 <Animated.Text style={[styles.cursor, { color: isDark ? '#ececf1' : '#0d0d0d', opacity: cursorOpacity }]}>
@@ -121,9 +135,24 @@ const styles = StyleSheet.create({
   botBubble: { backgroundColor: 'transparent', width: '100%', paddingTop: 2 },
 
   markdownWrapper: { flexDirection: 'column', alignItems: 'flex-start', width: '100%' },
+  sources: { width: '100%', borderTopWidth: 1, marginTop: 12, paddingTop: 8 },
+  sourcesTitle: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  sourceText: { fontSize: 11, lineHeight: 17 },
   agentTag: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   cursor: { fontSize: 16, fontWeight: 'bold', marginTop: 4, alignSelf: 'flex-start' }
 });
+
+const formatSourceMetadata = (source: SourceMetadata) =>
+  [
+    `Source: ${source.source}`,
+    source.session_id && `Session: ${source.session_id}`,
+    source.file_type && `Type: ${source.file_type}`,
+    source.page_number !== undefined && `Page: ${source.page_number}`,
+    source.uploaded_at && `Uploaded: ${source.uploaded_at}`,
+    source.chunk_number !== undefined && `Chunk: ${source.chunk_number}`,
+  ]
+    .filter((detail): detail is string => Boolean(detail))
+    .join(' · ');
 
 // Markdown Syntax Styling Maps Rules (Plain JavaScript configurations)
 const sharedMarkdownRules = {
