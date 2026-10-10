@@ -11,7 +11,6 @@ interface SidebarProps {
 
 export const SidebarOptions: React.FC<SidebarProps> = ({ preferences, setPreferences, isDark }) => {
   const providers: Array<'groq' | 'openai' | 'gemini'> = ['groq', 'openai', 'gemini'];
-  const ragProviders: Array<'cohere' | 'gemini'> = ['cohere', 'gemini'];
 
   return (
     <View style={[styles.sidebarInner, { backgroundColor: isDark ? '#171717' : '#f9f9f9' }]}>
@@ -62,7 +61,7 @@ export const SidebarOptions: React.FC<SidebarProps> = ({ preferences, setPrefere
         onChangeText={(txt) => setPreferences(prev => ({ ...prev, apiTokens: { ...prev.apiTokens, [prev.provider]: txt } }))}
       />
 
-      {/* 3. Restored Parameters Sliders */}
+      {/* 3. Base Core Parameters Sliders */}
       <View style={styles.sliderLabelRow}>
         <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Temperature</Text>
         <Text style={[styles.sliderValueText, { color: isDark ? '#ececf1' : '#0d0d0d' }]}>{preferences.temperature.toFixed(1)}</Text>
@@ -95,11 +94,10 @@ export const SidebarOptions: React.FC<SidebarProps> = ({ preferences, setPrefere
         thumbTintColor={isDark ? '#e5e5e5' : '#000000'}
       />
 
-      {/* 4. Restored Remember Context Toggle */}
+      {/* 4. Remember Context Toggle */}
       <View style={styles.toggleRow}>
         <View style={styles.toggleTextContainer}>
           <Text style={[styles.toggleLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Remember Context</Text>
-          <Text style={[styles.toggleSubtitle, { color: isDark ? '#525252' : '#a3a3a3' }]}>Includes data traces inside history context arrays</Text>
         </View>
         <Switch
           trackColor={{ false: '#2d2d2d', true: '#525252' }}
@@ -111,7 +109,7 @@ export const SidebarOptions: React.FC<SidebarProps> = ({ preferences, setPrefere
 
       <View style={[styles.divider, { backgroundColor: isDark ? '#222222' : '#e5e5e5' }]} />
 
-      {/* 5. MOVED TO BOTTOM: RAG Engine Control Suite */}
+      {/* 5. Minimal RAG Activation Switch Trigger */}
       <View style={styles.toggleRow}>
         <View style={styles.toggleTextContainer}>
           <Text style={[styles.toggleLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>RAG Search Engine</Text>
@@ -125,36 +123,7 @@ export const SidebarOptions: React.FC<SidebarProps> = ({ preferences, setPrefere
         />
       </View>
 
-      {preferences.ragEnabled && (
-        <View style={[styles.ragBox, { backgroundColor: isDark ? '#111111' : '#f0f0f0', borderColor: isDark ? '#222222' : '#e0e0e0' }]}>
-          <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>RAG Vector Embedder</Text>
-          <View style={styles.compactRow}>
-            {ragProviders.map((rp) => (
-              <TouchableOpacity 
-                key={rp} 
-                style={[styles.pillButton, { backgroundColor: isDark ? '#1a1a1a' : '#eaeaea', borderColor: isDark ? '#2d2d2d' : '#d5d5d5' }, preferences.ragProvider === rp && (isDark ? styles.pillActiveDark : styles.pillActiveLight)]}
-                onPress={() => setPreferences(prev => ({ ...prev, ragProvider: rp }))}
-              >
-                <Text style={[styles.pillText, { color: isDark ? '#a3a3a3' : '#4b5563' }, preferences.ragProvider === rp && { color: isDark ? '#0d0d0d' : '#ffffff', fontWeight: 'bold' }]}>
-                  {rp.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {preferences.ragProvider === 'cohere' && (
-            <TextInput
-              style={[styles.tokenInput, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff', borderColor: isDark ? '#2d2d2d' : '#d5d5d5', color: isDark ? '#ececf1' : '#0d0d0d' }]}
-              placeholder="Cohere API Key"
-              placeholderTextColor={isDark ? '#444444' : '#b4b4b4'}
-              secureTextEntry={true}
-              value={preferences.apiTokens.cohere}
-              onChangeText={(txt) => setPreferences(prev => ({ ...prev, apiTokens: { ...prev.apiTokens, cohere: txt } }))}
-            />
-          )}
-        </View>
-      )}
-
-      <Text style={[styles.sidebarCaption, { color: isDark ? '#404040' : '#b4b4b4' }]}>TraceFlow Engine · v1.2.0</Text>
+      <Text style={[styles.sidebarCaption, { color: isDark ? '#404040' : '#b4b4b4' }]}>TraceFlow Engine · v1.3.0</Text>
     </View>
   );
 };
@@ -170,13 +139,12 @@ const styles = StyleSheet.create({
   pillActiveDark: { backgroundColor: '#e5e5e5', borderColor: '#e5e5e5' },
   pillActiveLight: { backgroundColor: '#000000', borderColor: '#000000' },
   pillText: { fontSize: 11 },
-  tokenInput: { width: '100%', height: 34, borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, fontSize: 12, marginTop: 4 },
+  tokenInput: { width: '100%', height: 36, borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, fontSize: 12, marginTop: 4 },
   sliderLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   sliderValueText: { fontSize: 12, fontWeight: '700' },
   sliderBar: { width: '100%', height: 30, marginBottom: 4 },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, width: '100%' },
   toggleTextContainer: { flex: 1, paddingRight: 8 },
   toggleLabel: { fontSize: 12, fontWeight: '600' },
-  toggleSubtitle: { color: '#737373', fontSize: 10, marginTop: 2 },
-  ragBox: { padding: 10, borderRadius: 8, marginVertical: 8, borderWidth: 1 }
+  toggleSubtitle: { color: '#737373', fontSize: 10, marginTop: 2 }
 });

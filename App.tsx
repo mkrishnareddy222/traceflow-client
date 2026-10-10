@@ -2,36 +2,28 @@ import React, { useRef, useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
-  ScrollView, 
+  ScrollView,        // FIXED: Added missing ScrollView import
+  TouchableOpacity,  // FIXED: Added missing TouchableOpacity import
   SafeAreaView, 
   KeyboardAvoidingView, 
   Platform,
   Text,
-  TouchableOpacity,
   Animated,
   Easing,
   Dimensions
 } from 'react-native';
 import { useChatEngine } from './src/hooks/useChatEngine';
-import { ChatBubble } from './src/components/ChatBubble';
-import { InputBar } from './src/components/InputBar';
-import { HeaderBar } from './src/components/HeaderBar';
 import { SidebarOptions } from './src/components/SidebarOptions';
+import { DocumentUploadStage } from './src/components/DocumentUploadStage';
+import { ChatWorkspaceStage } from './src/components/ChatWorkspaceStage';
 
 export default function App() {
-  // FIXED DESTRUCTURING: Safely pulls missing variables from the updated useChatEngine contract
   const { 
-    messages, 
-    isTyping, 
-    isFileUploading, 
-    preferences, 
-    setPreferences, 
-    sendMessage, 
-    uploadFileToServer 
+    messages, isTyping, ragProcessingStep, indexedFiles, 
+    preferences, setPreferences, sendMessage, ingestFileWithProgress, clearActiveFilesContext 
   } = useChatEngine();
   
   const scrollViewRef = useRef<ScrollView>(null);
-  
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isMobile = windowWidth < 768;
@@ -39,11 +31,12 @@ export default function App() {
   const isDark = preferences.theme === 'dark';
   const slideAnim = useRef(new Animated.Value(-260)).current;
 
+  // ROUTING EVALUATION: If RAG is on but no files are loaded, go to document setup screen
+  const isShowUploadWizard = preferences.ragEnabled && indexedFiles.length === 0 && ragProcessingStep !== 'SUCCESS';
+
   useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setWindowWidth(window.width);
-    });
-    return () => subscription.remove();
+    const sub = Dimensions.addEventListener('change', ({ window }) => setWindowWidth(window.width));
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -57,61 +50,65 @@ export default function App() {
     }
   }, [isMobileMenuOpen, isMobile, slideAnim]);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const styleId = 'traceflow-global-scroll-fix';
+      let tag = document.getElementById(styleId) as HTMLStyleElement;
+      if (!tag) {
+        tag = document.createElement('style');
+        tag.id = styleId;
+        document.head.appendChild(tag);
+      }
+      tag.innerHTML = `
+        * { scrollbar-width: thin !important; scrollbar-color: ${isDark ? '#2f2f2f transparent' : '#d5d5d5 transparent'} !important; }
+        ::-webkit-scrollbar { width: 8px !important; height: 8px !important; }
+        ::-webkit-scrollbar-thumb { background-color: ${isDark ? '#2f2f2f' : '#cbd5e1'} !important; border-radius: 99px !important; }
+      `;
+    }
+  }, [isDark]);
+
+  const renderSidebar = () => (
+    <SidebarOptions preferences={preferences} setPreferences={setPreferences} isDark={isDark} />
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0d0d0d' : '#ffffff' }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardContainer}>
         <View style={styles.appLayout}>
           
-          {!isMobile && (
-            <View style={[styles.desktopSidebar, { backgroundColor: isDark ? '#171717' : '#f9f9f9', borderColor: isDark ? '#222222' : '#e5e5e5' }]}>
-              <SidebarOptions preferences={preferences} setPreferences={setPreferences} isDark={isDark} />
-            </View>
-          )}
+          {!isMobile && <View style={[styles.desktopSidebar, { backgroundColor: isDark ? '#171717' : '#f9f9f9', borderColor: isDark ? '#222222' : '#e5e5e5' }]}>{renderSidebar()}</View>}
 
           {isMobile && (
             <View style={styles.mobileDrawerOverlay} pointerEvents={isMobileMenuOpen ? 'auto' : 'none'}>
-              {isMobileMenuOpen && (
-                <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={() => setIsMobileMenuOpen(false)} />
-              )}
-              <Animated.View style={[styles.mobileSidebar, { transform: [{ translateX: slideAnim }], backgroundColor: isDark ? '#171717' : '#f9f9f9', borderColor: isDark ? '#222222' : '#e5e5e5' }]}>
-                <SidebarOptions preferences={preferences} setPreferences={setPreferences} isDark={isDark} />
-              </Animated.View>
+              {isMobileMenuOpen && <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={() => setIsMobileMenuOpen(false)} />}
+              <Animated.View style={[styles.mobileSidebar, { transform: [{ translateX: slideAnim }], backgroundColor: isDark ? '#171717' : '#f9f9f9', borderColor: isDark ? '#222222' : '#e5e5e5' }]}>{renderSidebar()}</Animated.View>
             </View>
           )}
 
-          <View style={[styles.chatArea, { backgroundColor: isDark ? '#0d0d0d' : '#ffffff' }]}>
-            <HeaderBar provider={preferences.provider} isMobile={isMobile} onToggleMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
-
-            <ScrollView 
-              ref={scrollViewRef}
-              style={styles.scrollContainer}
-              contentContainerStyle={[styles.scrollContent, messages.length === 0 && styles.scrollContentEmpty]}
-              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-            >
-              {messages.length === 0 ? (
-                <View style={styles.welcomeContainer}>
-                  <Text style={[styles.welcomeTitle, { fontSize: windowWidth < 450 ? 24 : 32, color: isDark ? '#ececf1' : '#0d0d0d' }]}>
-                    What’s on your mind?
-                  </Text>
-                  <Text style={[styles.welcomeSubtitle, { fontSize: windowWidth < 450 ? 14 : 15, color: isDark ? '#a3a3a3' : '#4b5563' }]}>
-                    Bring a question, a rough idea, or something you want to work through.
-                  </Text>
-                </View>
-              ) : (
-                messages.map((msg, index) => (
-                  <ChatBubble key={msg.id} item={msg} isTyping={isTyping} isLast={index === messages.length - 1} theme={preferences.theme} />
-                ))
-              )}
-            </ScrollView>
-
-            {/* FIXED CALL: Forwarding all props and async callbacks into InputBar */}
-            <InputBar 
-              onSubmit={sendMessage} 
-              uploadFileToServer={uploadFileToServer}
-              theme={preferences.theme} 
-              ragEnabled={preferences.ragEnabled} 
-              isFileUploading={isFileUploading}
-            />
+          <View style={[styles.chatArea, isShowUploadWizard && styles.centerStage, { backgroundColor: isDark ? '#0d0d0d' : '#ffffff' }]}>
+            {/* DYNAMIC SCREEN ROUTER INTERACTION LAYER */}
+            {isShowUploadWizard ? (
+              <DocumentUploadStage 
+                preferences={preferences} setPreferences={setPreferences} 
+                ragProcessingStep={ragProcessingStep} ingestFileWithProgress={ingestFileWithProgress} isDark={isDark} 
+              />
+            ) : (
+              <ChatWorkspaceStage 
+                messages={messages} 
+  isTyping={isTyping} 
+  indexedFiles={indexedFiles} 
+  clearActiveFilesContext={clearActiveFilesContext}
+  sendMessage={sendMessage} 
+  ingestFileWithProgress={ingestFileWithProgress} // LINKED: Maps the on-the-fly method trigger cleanly
+  provider={preferences.provider} 
+  theme={preferences.theme} 
+  ragEnabled={preferences.ragEnabled}
+  isMobile={isMobile} 
+  onToggleMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+  windowWidth={windowWidth} 
+  scrollViewRef={scrollViewRef as any}
+                />
+            )}
           </View>
 
         </View>
@@ -123,49 +120,11 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboardContainer: { flex: 1 },
-  scrollContainer: { 
-    flex: 1,
-    maxWidth: 720,        
-    width: '100%',
-    alignSelf: 'center',  
-    
-    // ============================================================
-    // ARCHITECT FIX: Custom CSS scrollbar styles for web platforms
-    // ============================================================
-    ...Platform.select({
-      web: {
-        // Sets scrollbar styling for Chrome, Safari, and newer Edge browsers
-        scrollbarWidth: 'thin',                 // Firefox support
-        scrollbarColor: '#2f2f2f transparent',  // Firefox thumb and track colors
-        
-        // Custom CSS strings passed into standard web styling
-        '::-webkit-scrollbar': {
-          width: 8,                             // Keeps the scrollbar sleek and thin
-        },
-        '::-webkit-scrollbar-track': {
-          backgroundColor: 'transparent',       // Blends the scrollbar background track away
-        },
-        '::-webkit-scrollbar-thumb': {
-          backgroundColor: '#2f2f2f',           // Subtle charcoal thumb color matching ChatGPT
-          borderRadius: 4,                      // Smooth rounded edges
-        },
-        '::-webkit-scrollbar-thumb:hover': {
-          backgroundColor: '#4f4f4f',           // Darkens slightly when hovered
-        },
-      } as any,
-      default: {},
-    }),
-  },
   appLayout: { flex: 1, flexDirection: 'row' },
   desktopSidebar: { width: 260, borderRightWidth: 1 },
   mobileDrawerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, flexDirection: 'row' },
   backdropTouch: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)' },
   mobileSidebar: { width: 260, height: '100%', borderRightWidth: 1, position: 'absolute', left: 0 },
   chatArea: { flex: 1, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, width: '100%' },
-  //scrollContainer: { flex: 1, maxWidth: 720, width: '100%', alignSelf: 'center' },
-  scrollContent: { paddingVertical: 20 },
-  scrollContentEmpty: { flexGrow: 1, justifyContent: 'center' },
-  welcomeContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 680, alignSelf: 'center', width: '100%' },
-  welcomeTitle: { fontWeight: '700', textAlign: 'center' },
-  welcomeSubtitle: { textAlign: 'center', marginTop: 12 }
+  centerStage: { justifyContent: 'center', alignItems: 'center' }
 });

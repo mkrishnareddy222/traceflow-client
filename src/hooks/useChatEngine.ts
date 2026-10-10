@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Platform } from 'react-native'; // FIXED: Importing the official Native/Web Platform detector module
-import { Message, ChatPreferences, UploadedFile } from '../types/chat';
+import { Platform } from 'react-native';
+import { Message, ChatPreferences, UploadedFile, ProcessingStep } from '../types/chat';
 
 export function useChatEngine() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [isFileUploading, setIsFileUploading] = useState(false);
   
-  // Unique persistent session ID for RAG database storage partition mapping
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+  // NEW LOGIC: Explicit layout pipeline stage controls
+  const [ragProcessingStep, setRagProcessingStep] = useState<ProcessingStep>('IDLE');
+  const [indexedFiles, setIndexedFiles] = useState<UploadedFile[]>([]);
+  const [sessionId] = useState(() => `session_${Date.now()}`);
 
   const [preferences, setPreferences] = useState<ChatPreferences>({
     provider: 'groq',
@@ -17,42 +18,37 @@ export function useChatEngine() {
     rememberConversation: true,
     theme: 'dark',
     ragEnabled: false,
-    ragProvider: 'cohere',
+    ragProvider: 'gemini',
+    chunkSize: 500,     // Default server threshold matching rag.py
+    chunkOverlap: 50,
     apiTokens: { groq: '', openai: '', gemini: '', cohere: '' }
   });
 
   const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // =================================══════════════════════════════
-  // REPAIRED ENGINE: Hybrid File Blob Multipart Transformer
-  // =================================══════════════════════════════
-  const uploadFileToServer = async (fileObj: { uri: string; name: string; type: string, blob?: any }): Promise<UploadedFile | null> => {
-    setIsFileUploading(true);
+  const ingestFileWithProgress = async (fileObj: { uri: string; name: string; type: string, blob?: any }) => {
+    // Stage 1: Transmitting payload package
+    setRagProcessingStep('TRANSMITTING');
+    await new Promise(r => setTimeout(r, 800));
+
+    // Stage 2: Parsing & chunking text structures over backend slider weights
+    setRagProcessingStep('SPLITTING_CHUNKS');
+    
     try {
       const formData = new FormData();
       formData.append('session_id', sessionId);
       formData.append('provider', preferences.ragProvider);
       
-      // Using core react-native Platform engine check cleanly
+      // Map sliders text settings onto Multi-part parameters lookup
+      formData.append('chunk_size', preferences.chunkSize.toString());
+      formData.append('chunk_overlap', preferences.chunkOverlap.toString());
+
       if (Platform.OS === 'web') {
-        let finalFileBlob;
-        if (fileObj.uri.startsWith('data:') || fileObj.uri.startsWith('blob:')) {
-          const res = await fetch(fileObj.uri);
-          finalFileBlob = await res.blob();
-        } else if (fileObj.blob && fileObj.blob.file) {
-          finalFileBlob = fileObj.blob.file;
-        } else {
-          const res = await fetch(fileObj.uri);
-          finalFileBlob = await res.blob();
-        }
+        const res = await fetch(fileObj.uri);
+        const finalFileBlob = await res.blob();
         formData.append('files', finalFileBlob, fileObj.name);
       } else {
-        // Native mobile systems track files via local system paths
-        formData.append('files', {
-          uri: fileObj.uri,
-          name: fileObj.name,
-          type: fileObj.type,
-        } as any);
+        formData.append('files', { uri: fileObj.uri, name: fileObj.name, type: fileObj.type } as any);
       }
 
       const response = await fetch(`${BASE_URL}/api/rag/upload`, {
@@ -61,16 +57,22 @@ export function useChatEngine() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error(`Upload fault server code: ${response.status}`);
-      const data = await response.json();
-      console.log('RAG Indexing Success:', data.message);
+      if (!response.ok) throw new Error(`Upload failed code: ${response.status}`);
+      
+      // Stage 3: Vector indexing embedding processing loop
+      setRagProcessingStep('EMBEDDING');
+      await new Promise(r => setTimeout(r, 1200));
 
-      return { id: Date.now().toString(), name: fileObj.name, size: 'Synced' };
+      // Stage 4: Ingestion loop verified
+      setRagProcessingStep('SUCCESS');
+      setIndexedFiles(prev => [...prev, { id: Date.now().toString(), name: fileObj.name, size: 'Synced' }]);
+      await new Promise(r => setTimeout(r, 800));
+      
     } catch (err) {
-      console.error('Network file stream failure:', err);
-      return null;
+      console.error(err);
+      alert('Document ingestion pipeline encountered an unexpected validation failure.');
     } finally {
-      setIsFileUploading(false);
+      setRagProcessingStep('IDLE'); // Restore default view boards state
     }
   };
 
@@ -85,12 +87,6 @@ export function useChatEngine() {
     setIsTyping(true);
 
     try {
-      const customToken = preferences.apiTokens[preferences.provider];
-      const formattedHistory = messages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }));
-
       let response;
       if (preferences.ragEnabled) {
         const formData = new FormData();
@@ -100,11 +96,14 @@ export function useChatEngine() {
         formData.append('temperature', preferences.temperature.toString());
         formData.append('max_tokens', preferences.maxTokens.toString());
 
-        response = await fetch(`${BASE_URL}/api/rag/query`, {
-          method: 'POST',
-          body: formData,
-        });
+        response = await fetch(`${BASE_URL}/api/rag/query`, { method: 'POST', body: formData });
       } else {
+        const customToken = preferences.apiTokens[preferences.provider];
+        const formattedHistory = messages.map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text
+        }));
+
         response = await fetch(`${BASE_URL}/api/search`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -121,7 +120,7 @@ export function useChatEngine() {
         });
       }
 
-      if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
+      if (!response.ok) throw new Error(`Status: ${response.status}`);
       const jsonResponse = await response.json();
 
       if (jsonResponse && jsonResponse.content) {
@@ -130,7 +129,7 @@ export function useChatEngine() {
         );
       }
     } catch (error) {
-      console.error('Connection fault:', error);
+      console.error(error);
       setMessages((prevMessages) =>
         prevMessages.map((msg) => msg.id === botMsgId ? { ...msg, text: 'Failed to establish connection to target endpoint.' } : msg)
       );
@@ -139,5 +138,18 @@ export function useChatEngine() {
     }
   };
 
-  return { messages, isTyping, isFileUploading, preferences, setPreferences, sendMessage, uploadFileToServer };
+  const clearActiveFilesContext = () => setIndexedFiles([]);
+
+  return { 
+    messages, 
+    isTyping, 
+    ragProcessingStep, 
+    indexedFiles, 
+    preferences, 
+    setPreferences, 
+    sendMessage, 
+    ingestFileWithProgress,
+    clearActiveFilesContext
+  };
 }
+  

@@ -1,51 +1,59 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Text, ScrollView } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker'; // Import Native Picker Component
+import * as DocumentPicker from 'expo-document-picker'; 
 import { UploadedFile } from '../types/chat';
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
-  uploadFileToServer: (fileObj: { uri: string; name: string; type: string, blob?: any }) => Promise<UploadedFile | null>;
+  // FIXED: Renamed contract token prop to match your updated hook signature
+  ingestFileWithProgress: (fileObj: { uri: string; name: string; type: string, blob?: any }) => Promise<void>;
   theme: 'light' | 'dark';
   ragEnabled: boolean;
   isFileUploading: boolean;
 }
 
-export const InputBar: React.FC<InputBarProps> = ({ onSubmit, uploadFileToServer, theme, ragEnabled, isFileUploading }) => {
+export const InputBar: React.FC<InputBarProps> = ({ 
+  onSubmit, 
+  ingestFileWithProgress, 
+  theme, 
+  ragEnabled, 
+  isFileUploading 
+}) => {
   const [localQuery, setLocalQuery] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<UploadedFile[]>([]);
   const isDark = theme === 'dark';
 
   const handleDocumentSelectionTrigger = async () => {
     try {
-      // Launch standard OS file selection window
       const pickerResult = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         copyToCacheDirectory: true,
       });
 
-      // Stop execution if user backs out or cancels selection
       if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
         return;
       }
 
       const selectedAsset = pickerResult.assets[0];
 
-      // Extract metadata securely matching your hook contract structures
       const targetFilePayload = {
         uri: selectedAsset.uri,
         name: selectedAsset.name,
         type: selectedAsset.mimeType || 'application/pdf',
-        // CRITICAL WEB FIX: Capture raw file structure directly if running on browser thread
         blob: (selectedAsset as any).output?.[0] || selectedAsset
       };
 
-      // TRIGGER EXTENSION MULTIPART FORM REST ROUTING IN Hook
-      const syncedFileResult = await uploadFileToServer(targetFilePayload);
+      // Call the newly named async orchestration method
+      await ingestFileWithProgress(targetFilePayload);
       
-      if (syncedFileResult) {
-        setAttachedFiles(prev => [...prev, syncedFileResult]);
-      }
+      // Mirror successful synchronization inside localized UI list state tracks
+      const clientSideFileBubble: UploadedFile = {
+        id: Date.now().toString(),
+        name: selectedAsset.name,
+        size: 'Synced'
+      };
+      setAttachedFiles(prev => [...prev, clientSideFileBubble]);
+
     } catch (err) {
       console.error('Document picking error event sequence:', err);
     }

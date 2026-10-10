@@ -11,19 +11,23 @@ export interface UploadedFile {
   size: string;
 }
 
+export type ProcessingStep = 'IDLE' | 'TRANSMITTING' | 'SPLITTING_CHUNKS' | 'EMBEDDING' | 'SUCCESS';
+
 export interface ChatPreferences {
   provider: 'groq' | 'openai' | 'gemini';
   temperature: number;
   maxTokens: number;
   rememberConversation: boolean;
   theme: 'light' | 'dark';
-  // RAG CONTRACT FIELDS
   ragEnabled: boolean;
   ragProvider: 'cohere' | 'gemini';
+  // NEW CRITICAL CONFIGURATION TOKENS
+  chunkSize: number;
+  chunkOverlap: number;
   apiTokens: {
     groq: string;
     openai: string;
     gemini: string;
-    cohere: string; // Dynamic tracking token added
+    cohere: string;
   };
 }
