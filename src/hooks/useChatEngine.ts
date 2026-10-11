@@ -56,9 +56,9 @@ export function useChatEngine() {
   const [sessionId] = useState(() => `session_${Date.now()}`);
 
   const [preferences, setPreferences] = useState<ChatPreferences>({
-    provider: 'groq',
+    provider: 'openai',
     temperature: 0.7,
-    maxTokens: 2048,
+    maxTokens: 768,
     rememberConversation: true,
     theme: 'dark',
     ragEnabled: false,
@@ -190,6 +190,7 @@ export function useChatEngine() {
   };
 
   const clearActiveFilesContext = () => setIndexedFiles([]);
+  const clearMessages = () => setMessages([]);
 
   return { 
     messages, 
@@ -200,7 +201,8 @@ export function useChatEngine() {
     setPreferences, 
     sendMessage, 
     ingestFileWithProgress,
-    clearActiveFilesContext
+    clearActiveFilesContext,
+    clearMessages
   };
 }
   

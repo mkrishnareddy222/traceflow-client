@@ -1,150 +1,231 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, Switch } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, Switch, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { ChatPreferences } from '../types/chat';
 
 interface SidebarProps {
   preferences: ChatPreferences;
-  setPreferences: React.Dispatch<React.SetStateAction<ChatPreferences>>;
+  onThemeChange: (theme: 'light' | 'dark') => void;
+  onProviderChange: (provider: 'groq' | 'openai' | 'gemini') => void;
+  onTokenChange: (text: string) => void;
+  onTemperatureChange: (val: number) => void;
+  onMaxTokensChange: (val: number) => void;
+  onRememberToggle: (val: boolean) => void;
+  onRagToggle: (val: boolean) => void;
   isDark: boolean;
 }
 
-export const SidebarOptions: React.FC<SidebarProps> = ({ preferences, setPreferences, isDark }) => {
-  const providers: Array<'groq' | 'openai' | 'gemini'> = ['groq', 'openai', 'gemini'];
+const providers: ('groq' | 'openai' | 'gemini')[] = ['groq', 'openai', 'gemini'];
+
+export const SidebarOptions: React.FC<SidebarProps> = ({
+  preferences,
+  onThemeChange,
+  onProviderChange,
+  onTokenChange,
+  onTemperatureChange,
+  onMaxTokensChange,
+  onRememberToggle,
+  onRagToggle,
+  isDark,
+}) => {
+  const colors = {
+    background: isDark ? '#101215' : '#f4f4f5',
+    panel: isDark ? '#0b0d0f' : '#ffffff',
+    border: isDark ? '#24272b' : '#e4e4e7',
+    text: isDark ? '#d4d4d8' : '#18181b',
+    muted: isDark ? '#7c8189' : '#71717a',
+  };
 
   return (
-    <View style={[styles.sidebarInner, { backgroundColor: isDark ? '#171717' : '#f9f9f9' }]}>
-      <Text style={[styles.sidebarTitle, { color: isDark ? '#737373' : '#a3a3a3' }]}>WORKSPACE OPTIONS</Text>
-      <View style={[styles.divider, { backgroundColor: isDark ? '#222222' : '#e5e5e5' }]} />
-      
-      {/* 1. Interface Toggle Mode */}
-      <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Interface Mode</Text>
-      <View style={styles.compactRow}>
-        {[
-          { key: 'light', label: '☀️ Light' },
-          { key: 'dark', label: '🌙 Dark' }
-        ].map((t) => (
-          <TouchableOpacity 
-            key={t.key} 
-            style={[styles.pillButton, { backgroundColor: isDark ? '#1a1a1a' : '#eaeaea', borderColor: isDark ? '#2d2d2d' : '#d5d5d5' }, preferences.theme === t.key && (isDark ? styles.pillActiveDark : styles.pillActiveLight)]}
-            onPress={() => setPreferences(prev => ({ ...prev, theme: t.key as 'light' | 'dark' }))}
-          >
-            <Text style={[styles.pillText, { color: isDark ? '#a3a3a3' : '#4b5563' }, preferences.theme === t.key && { color: isDark ? '#0d0d0d' : '#ffffff', fontWeight: 'bold' }]}>
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* 2. Base Core AI Settings */}
-      <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563', marginTop: 12 }]}>AI Provider</Text>
-      <View style={styles.compactRow}>
-        {providers.map((p) => (
-          <TouchableOpacity 
-            key={p} 
-            style={[styles.pillButton, { backgroundColor: isDark ? '#1a1a1a' : '#eaeaea', borderColor: isDark ? '#2d2d2d' : '#d5d5d5' }, preferences.provider === p && (isDark ? styles.pillActiveDark : styles.pillActiveLight)]}
-            onPress={() => setPreferences(prev => ({ ...prev, provider: p }))}
-          >
-            <Text style={[styles.pillText, { color: isDark ? '#a3a3a3' : '#4b5563' }, preferences.provider === p && { color: isDark ? '#0d0d0d' : '#ffffff' }]}>
-              {p === 'openai' ? 'OpenAI' : p.charAt(0).toUpperCase() + p.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TextInput
-        style={[styles.tokenInput, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff', borderColor: isDark ? '#2d2d2d' : '#d5d5d5', color: isDark ? '#ececf1' : '#0d0d0d' }]}
-        placeholder={`${preferences.provider.toUpperCase()} Override Token`}
-        placeholderTextColor={isDark ? '#444444' : '#b4b4b4'}
-        secureTextEntry={true}
-        value={preferences.apiTokens[preferences.provider]}
-        onChangeText={(txt) => setPreferences(prev => ({ ...prev, apiTokens: { ...prev.apiTokens, [prev.provider]: txt } }))}
-      />
-
-      {/* 3. Base Core Parameters Sliders */}
-      <View style={styles.sliderLabelRow}>
-        <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Temperature</Text>
-        <Text style={[styles.sliderValueText, { color: isDark ? '#ececf1' : '#0d0d0d' }]}>{preferences.temperature.toFixed(1)}</Text>
-      </View>
-      <Slider
-        style={styles.sliderBar}
-        minimumValue={0.0}
-        maximumValue={2.0}
-        step={0.1}
-        value={preferences.temperature}
-        onValueChange={(val) => setPreferences(prev => ({ ...prev, temperature: val }))}
-        minimumTrackTintColor={isDark ? '#e5e5e5' : '#000000'}
-        maximumTrackTintColor={isDark ? '#2d2d2d' : '#e5e5e5'}
-        thumbTintColor={isDark ? '#e5e5e5' : '#000000'}
-      />
-
-      <View style={styles.sliderLabelRow}>
-        <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Max Tokens</Text>
-        <Text style={[styles.sliderValueText, { color: isDark ? '#ececf1' : '#0d0d0d' }]}>{preferences.maxTokens}</Text>
-      </View>
-      <Slider
-        style={styles.sliderBar}
-        minimumValue={128}
-        maximumValue={4096}
-        step={128}
-        value={preferences.maxTokens}
-        onValueChange={(val) => setPreferences(prev => ({ ...prev, maxTokens: Math.round(val) }))}
-        minimumTrackTintColor={isDark ? '#e5e5e5' : '#000000'}
-        maximumTrackTintColor={isDark ? '#2d2d2d' : '#e5e5e5'}
-        thumbTintColor={isDark ? '#e5e5e5' : '#000000'}
-      />
-
-      {/* 4. Remember Context Toggle */}
-      <View style={styles.toggleRow}>
-        <View style={styles.toggleTextContainer}>
-          <Text style={[styles.toggleLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Remember Context</Text>
+    <View style={[styles.sidebar, { backgroundColor: colors.background }]}>
+      <View style={[styles.brandHeader, { borderBottomColor: colors.border }]}>
+        <View style={styles.brandMark}>
+          <Text style={styles.brandMarkText}>T</Text>
         </View>
-        <Switch
-          trackColor={{ false: '#2d2d2d', true: '#525252' }}
-          thumbColor={preferences.rememberConversation ? (isDark ? '#ececf1' : '#000000') : '#a3a3a3'}
-          value={preferences.rememberConversation}
-          onValueChange={(val) => setPreferences(prev => ({ ...prev, rememberConversation: val }))}
-        />
-      </View>
-
-      <View style={[styles.divider, { backgroundColor: isDark ? '#222222' : '#e5e5e5' }]} />
-
-      {/* 5. Minimal RAG Activation Switch Trigger */}
-      <View style={styles.toggleRow}>
-        <View style={styles.toggleTextContainer}>
-          <Text style={[styles.toggleLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>RAG Search Engine</Text>
-          <Text style={[styles.toggleSubtitle, { color: isDark ? '#525252' : '#a3a3a3' }]}>Inject private files into prompts</Text>
+        <View>
+          <Text style={[styles.brandName, { color: colors.text }]}>TraceFlow</Text>
+          <Text style={[styles.brandSubtitle, { color: colors.muted }]}>AI workspace</Text>
         </View>
-        <Switch
-          trackColor={{ false: '#2d2d2d', true: '#10b981' }}
-          thumbColor={preferences.ragEnabled ? '#ffffff' : '#a3a3a3'}
-          value={preferences.ragEnabled}
-          onValueChange={(val) => setPreferences(prev => ({ ...prev, ragEnabled: val }))}
-        />
       </View>
 
-      <Text style={[styles.sidebarCaption, { color: isDark ? '#404040' : '#b4b4b4' }]}>TraceFlow Engine · v1.3.0</Text>
+      <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator>
+        <Text style={[styles.inputLabel, { color: colors.muted }]}>Interface Mode</Text>
+        <View style={[styles.themeSwitch, { backgroundColor: colors.panel, borderColor: colors.border }]}>
+          {([
+            { key: 'light', label: '☼  Light' },
+            { key: 'dark', label: '☾  Dark' },
+          ] as const).map((theme) => {
+            const active = preferences.theme === theme.key;
+            return (
+              <TouchableOpacity
+                key={theme.key}
+                onPress={() => onThemeChange(theme.key)}
+                style={[
+                  styles.themeButton,
+                  active && { backgroundColor: isDark ? '#202329' : '#e7e7e9' },
+                ]}
+              >
+                <Text style={[styles.themeButtonText, { color: active ? colors.text : colors.muted }]}>
+                  {theme.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.muted }]}>MODEL</Text>
+          <Text style={[styles.infoIcon, { color: colors.muted }]}>ⓘ</Text>
+        </View>
+
+        <Text style={[styles.inputLabel, { color: colors.muted }]}>AI provider</Text>
+        <View style={[styles.providerSwitch, { backgroundColor: colors.panel, borderColor: colors.border }]}>
+          {providers.map((provider) => {
+            const active = preferences.provider === provider;
+            return (
+              <TouchableOpacity
+                key={provider}
+                onPress={() => onProviderChange(provider)}
+                style={[
+                  styles.providerButton,
+                  active && { backgroundColor: isDark ? '#202329' : '#e7e7e9' },
+                ]}
+              >
+                <Text style={[styles.providerText, { color: active ? colors.text : colors.muted }]}>
+                  {provider === 'openai' ? 'OpenAI' : provider.charAt(0).toUpperCase() + provider.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TextInput
+          style={[styles.tokenInput, { backgroundColor: colors.panel, borderColor: colors.border, color: colors.text }]}
+          placeholder={`${preferences.provider.toUpperCase()} API key`}
+          placeholderTextColor={colors.muted}
+          secureTextEntry
+          value={preferences.apiTokens[preferences.provider]}
+          onChangeText={onTokenChange}
+        />
+
+        <View style={styles.sliderLabelRow}>
+          <Text style={[styles.controlLabel, { color: colors.muted }]}>Temperature</Text>
+          <Text style={[styles.valueBadge, { backgroundColor: isDark ? '#202329' : '#e7e7e9', color: colors.text }]}>
+            {preferences.temperature.toFixed(1)}
+          </Text>
+        </View>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={1}
+          step={0.1}
+          value={preferences.temperature}
+          onValueChange={onTemperatureChange}
+          minimumTrackTintColor="#10b981"
+          maximumTrackTintColor={colors.border}
+          thumbTintColor="#10b981"
+        />
+        <View style={styles.sliderCaptions}>
+          <Text style={[styles.sliderCaption, { color: colors.muted }]}>Precise</Text>
+          <Text style={[styles.sliderCaption, { color: colors.muted }]}>Creative</Text>
+        </View>
+
+        <View style={[styles.sliderLabelRow, styles.secondSliderLabel]}>
+          <Text style={[styles.controlLabel, { color: colors.muted }]}>Max tokens</Text>
+          <Text style={[styles.valueBadge, { backgroundColor: isDark ? '#202329' : '#e7e7e9', color: colors.text }]}>
+            {preferences.maxTokens}
+          </Text>
+        </View>
+        <Slider
+          style={styles.slider}
+          minimumValue={128}
+          maximumValue={4096}
+          step={128}
+          value={preferences.maxTokens}
+          onValueChange={onMaxTokensChange}
+          minimumTrackTintColor="#10b981"
+          maximumTrackTintColor={colors.border}
+          thumbTintColor="#10b981"
+        />
+        <View style={styles.sliderCaptions}>
+          <Text style={[styles.sliderCaption, { color: colors.muted }]}>Short</Text>
+          <Text style={[styles.sliderCaption, { color: colors.muted }]}>Detailed</Text>
+        </View>
+
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleTextContainer}>
+            <Text style={[styles.toggleLabel, { color: colors.text }]}>Remember context</Text>
+            <Text style={[styles.toggleSubtitle, { color: colors.muted }]}>Keep conversation history</Text>
+          </View>
+          <Switch
+            trackColor={{ false: colors.border, true: '#10b981' }}
+            thumbColor={preferences.rememberConversation ? '#ffffff' : '#a1a1aa'}
+            value={preferences.rememberConversation}
+            onValueChange={onRememberToggle}
+          />
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleTextContainer}>
+            <Text style={[styles.toggleLabel, { color: colors.text }]}>RAG search engine</Text>
+            <Text style={[styles.toggleSubtitle, { color: colors.muted }]}>Inject private files into prompts</Text>
+          </View>
+          <Switch
+            trackColor={{ false: colors.border, true: '#10b981' }}
+            thumbColor={preferences.ragEnabled ? '#ffffff' : '#a1a1aa'}
+            value={preferences.ragEnabled}
+            onValueChange={onRagToggle}
+          />
+        </View>
+      </ScrollView>
+
+      <View style={[styles.sidebarFooter, { borderTopColor: colors.border }]}>
+        <View style={styles.footerStatusDot} />
+        <View>
+          <Text style={[styles.footerTitle, { color: colors.muted }]}>SYSTEM OPERATIONAL</Text>
+          <Text style={[styles.footerSubtitle, { color: colors.muted }]}>TraceFlow Engine · v1.3.0</Text>
+        </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  sidebarInner: { flex: 1, padding: 16 },
-  sidebarTitle: { fontWeight: '700', fontSize: 11, letterSpacing: 0.8 },
-  inputLabel: { fontSize: 11, fontWeight: '700', marginBottom: 4, marginTop: 12 },
-  sidebarCaption: { fontSize: 11, marginTop: 'auto' },
-  divider: { height: 1, marginVertical: 12 },
-  compactRow: { flexDirection: 'row', gap: 6, width: '100%', marginBottom: 4 },
-  pillButton: { flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  pillActiveDark: { backgroundColor: '#e5e5e5', borderColor: '#e5e5e5' },
-  pillActiveLight: { backgroundColor: '#000000', borderColor: '#000000' },
-  pillText: { fontSize: 11 },
-  tokenInput: { width: '100%', height: 36, borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, fontSize: 12, marginTop: 4 },
-  sliderLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  sliderValueText: { fontSize: 12, fontWeight: '700' },
-  sliderBar: { width: '100%', height: 30, marginBottom: 4 },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, width: '100%' },
+  sidebar: { flex: 1, width: '100%' },
+  brandHeader: { height: 68, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, borderBottomWidth: 1 },
+  brandMark: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#e4e4e7', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  brandMarkText: { color: '#18181b', fontSize: 14, fontWeight: '700' },
+  brandName: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  brandSubtitle: { fontSize: 10, marginTop: 2 },
+  optionsScroll: { flex: 1 },
+  optionsContent: { paddingHorizontal: 17, paddingTop: 2, paddingBottom: 18 },
+  inputLabel: { fontSize: 10, fontWeight: '500', marginBottom: 7 },
+  themeSwitch: { height: 34, flexDirection: 'row', borderWidth: 1, borderRadius: 8, padding: 2, marginBottom: 20 },
+  themeButton: { flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  themeButtonText: { fontSize: 10, fontWeight: '500' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 },
+  sectionTitle: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
+  infoIcon: { fontSize: 12 },
+  providerSwitch: { height: 37, flexDirection: 'row', borderWidth: 1, borderRadius: 8, padding: 3, marginBottom: 14 },
+  providerButton: { flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  providerText: { fontSize: 10, fontWeight: '500' },
+  tokenInput: { width: '100%', height: 35, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, fontSize: 10, marginBottom: 8 },
+  sliderLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 9 },
+  controlLabel: { fontSize: 10, fontWeight: '500' },
+  valueBadge: { fontSize: 9, fontWeight: '600', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 3 },
+  slider: { width: '100%', height: 24, marginTop: 1 },
+  sliderCaptions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -2 },
+  sliderCaption: { fontSize: 8 },
+  secondSliderLabel: { marginTop: 16 },
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 19, width: '100%' },
   toggleTextContainer: { flex: 1, paddingRight: 8 },
-  toggleLabel: { fontSize: 12, fontWeight: '600' },
-  toggleSubtitle: { color: '#737373', fontSize: 10, marginTop: 2 }
+  toggleLabel: { fontSize: 11, fontWeight: '600' },
+  toggleSubtitle: { fontSize: 9, marginTop: 3 },
+  divider: { height: 1, marginTop: 19 },
+  sidebarFooter: { minHeight: 58, borderTopWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18 },
+  footerStatusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#10b981', marginRight: 10 },
+  footerTitle: { fontSize: 8, letterSpacing: 0.3 },
+  footerSubtitle: { fontSize: 8, marginTop: 3 },
 });

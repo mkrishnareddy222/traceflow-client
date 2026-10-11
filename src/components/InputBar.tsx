@@ -1,27 +1,29 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Text, ScrollView } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker'; 
+import * as DocumentPicker from 'expo-document-picker';
 import { UploadedFile } from '../types/chat';
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
-  // FIXED: Renamed contract token prop to match your updated hook signature
-  ingestFileWithProgress: (fileObj: { uri: string; name: string; type: string, blob?: any }) => Promise<void>;
+  ingestFileWithProgress: (fileObj: any) => Promise<void>;
   theme: 'light' | 'dark';
   ragEnabled: boolean;
   isFileUploading: boolean;
+  indexedFiles: UploadedFile[];
+  clearActiveFilesContext: () => void;
+  provider: string;
+  maxTokens: number;
 }
 
 export const InputBar: React.FC<InputBarProps> = ({ 
-  onSubmit, 
-  ingestFileWithProgress, 
-  theme, 
-  ragEnabled, 
-  isFileUploading 
+  onSubmit, ingestFileWithProgress, theme, ragEnabled, isFileUploading, indexedFiles, clearActiveFilesContext,
+  provider, maxTokens
 }) => {
   const [localQuery, setLocalQuery] = useState('');
-  const [attachedFiles, setAttachedFiles] = useState<UploadedFile[]>([]);
   const isDark = theme === 'dark';
+  const providerLabel = provider === 'openai'
+    ? 'OpenAI'
+    : provider.charAt(0).toUpperCase() + provider.slice(1);
 
   const handleDocumentSelectionTrigger = async () => {
     try {
@@ -30,112 +32,110 @@ export const InputBar: React.FC<InputBarProps> = ({
         copyToCacheDirectory: true,
       });
 
-      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
-        return;
-      }
-
+      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) return;
       const selectedAsset = pickerResult.assets[0];
 
-      const targetFilePayload = {
+      await ingestFileWithProgress({
         uri: selectedAsset.uri,
         name: selectedAsset.name,
         type: selectedAsset.mimeType || 'application/pdf',
         blob: (selectedAsset as any).output?.[0] || selectedAsset
-      };
-
-      // Call the newly named async orchestration method
-      await ingestFileWithProgress(targetFilePayload);
-      
-      // Mirror successful synchronization inside localized UI list state tracks
-      const clientSideFileBubble: UploadedFile = {
-        id: Date.now().toString(),
-        name: selectedAsset.name,
-        size: 'Synced'
-      };
-      setAttachedFiles(prev => [...prev, clientSideFileBubble]);
-
+      });
     } catch (err) {
-      console.error('Document picking error event sequence:', err);
+      console.error('Document selection exception:', err);
     }
-  };
-
-  const handleRemoveFile = (id: string) => {
-    setAttachedFiles(prev => prev.filter(f => f.id !== id));
   };
 
   const handleTriggerSubmit = () => {
     if (!localQuery.trim()) return;
     onSubmit(localQuery.trim());
     setLocalQuery('');
-    setAttachedFiles([]);
   };
 
   return (
-    <View style={[styles.masterWrapper, { backgroundColor: isDark ? '#0d0d0d' : '#ffffff' }]}>
-      
-      {attachedFiles.length > 0 && ragEnabled && (
-        <View style={styles.filesRowOuter}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filesScrollContainer}>
-            {attachedFiles.map(file => (
-              <View key={file.id} style={[styles.filePill, { backgroundColor: isDark ? '#222222' : '#f0f0f0' }]}>
-                <Text style={[styles.fileNameText, { color: isDark ? '#ececf1' : '#0d0d0d' }]} numberOfLines={1}>
-                  🟢 {file.name} (Indexed)
-                </Text>
-                <TouchableOpacity onPress={() => handleRemoveFile(file.id)} style={styles.removeFileBtn}>
-                  <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 12 }}>×</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      <View style={[styles.inputBoxShell, { backgroundColor: isDark ? '#171717' : '#f4f4f4', borderColor: isDark ? '#262626' : '#e5e5e5' }]}>
+    <View style={styles.masterWrapper}>
+      <View style={[
+        styles.inputCapsuleContainer,
+        { backgroundColor: isDark ? '#101114' : '#f9fafb', borderColor: isDark ? '#24262b' : '#e5e7eb' }
+      ]}>
         
-        {ragEnabled && (
-          <TouchableOpacity 
-            style={[styles.attachButton, isFileUploading && { opacity: 0.4 }]} 
-            onPress={handleDocumentSelectionTrigger}
-            disabled={isFileUploading}
-          >
-            <Text style={{ color: isDark ? '#b4b4b4' : '#000000', fontSize: 18, fontWeight: '600' }}>
-              {isFileUploading ? '⌛' : '+'}
-            </Text>
-          </TouchableOpacity>
+        {/* FILE PILLS INLINE INSIDE CONTAINER TRACE */}
+        {ragEnabled && indexedFiles.length > 0 && (
+          <View style={styles.inlineFilesArea}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filesScrollContainer}>
+              {indexedFiles.map(file => (
+                <View key={file.id} style={[styles.filePill, { backgroundColor: isDark ? '#222222' : '#e5e5e5' }]}>
+                  <Text style={[styles.fileNameText, { color: isDark ? '#ececf1' : '#0d0d0d' }]} numberOfLines={1}>
+                    📎 {file.name}
+                  </Text>
+                  <TouchableOpacity onPress={clearActiveFilesContext} style={styles.removeFileBtn}>
+                    <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 11 }}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         )}
 
         <TextInput
           style={[styles.inputField, { color: isDark ? '#ececf1' : '#0d0d0d' }]}
-          placeholder={isFileUploading ? "Indexing database asset onto disk storage..." : "Message TraceFlow..."}
-          placeholderTextColor={isDark ? '#525252' : '#a3a3a3'}
+          placeholder={isFileUploading ? 'Structuring text indices...' : 'Message TraceFlow...'}
+          placeholderTextColor={isDark ? '#71717a' : '#a1a1aa'}
           value={localQuery}
           onChangeText={setLocalQuery}
           onSubmitEditing={handleTriggerSubmit}
           editable={!isFileUploading}
         />
 
-        <TouchableOpacity 
-          style={[styles.sendButton, { backgroundColor: isDark ? '#b4b4b4' : '#000000' }, isFileUploading && { opacity: 0.5 }]} 
-          onPress={handleTriggerSubmit}
-          disabled={isFileUploading}
-        >
-          <Text style={[styles.sendButtonText, { color: isDark ? '#0d0d0d' : '#ffffff' }]}>➔</Text>
-        </TouchableOpacity>
+        <View style={styles.interactiveSubRow}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={ragEnabled ? 'Attach document' : 'Enable RAG to attach a document'}
+            style={[styles.attachButton, (!ragEnabled || isFileUploading) && styles.disabledAttachButton]}
+            onPress={handleDocumentSelectionTrigger}
+            disabled={!ragEnabled || isFileUploading}
+          >
+            <Text style={{ color: isDark ? '#a1a1aa' : '#52525b', fontSize: 24, fontWeight: '300', lineHeight: 26 }}>
+              {isFileUploading ? '⌛' : '+'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.requestSettings, { color: isDark ? '#71717a' : '#71717a' }]}>
+            {providerLabel} · {maxTokens} tokens
+          </Text>
+          <View style={styles.submitSpacer} />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              { backgroundColor: isDark ? '#15171b' : '#ffffff', borderColor: isDark ? '#292c32' : '#d4d4d8' },
+              !localQuery.trim() && styles.disabledSendButton,
+            ]}
+            onPress={handleTriggerSubmit}
+            disabled={!localQuery.trim() || isFileUploading}
+          >
+            <Text style={[styles.sendButtonText, { color: isDark ? '#9ca3af' : '#52525b' }]}>➤</Text>
+          </TouchableOpacity>
+        </View>
+
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  masterWrapper: { maxWidth: 720, width: '100%', alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'column' },
-  filesRowOuter: { width: '100%', marginBottom: 8 },
-  filesScrollContainer: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
-  filePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
-  fileNameText: { fontSize: 12, maxWidth: 160 },
-  removeFileBtn: { marginLeft: 8, paddingHorizontal: 4, justifyContent: 'center', alignItems: 'center' },
-  inputBoxShell: { flexDirection: 'row', width: '100%', height: 48, borderRadius: 24, borderWidth: 1, alignItems: 'center', paddingHorizontal: 8 },
-  attachButton: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginRight: 4 },
-  inputField: { flex: 1, height: '100%', paddingHorizontal: 10, fontSize: 15 },
-  sendButton: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  sendButtonText: { fontSize: 14, fontWeight: 'bold' }
+  masterWrapper: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 2, paddingBottom: 10 },
+  inputCapsuleContainer: { width: '100%', minHeight: 84, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingTop: 7, paddingBottom: 7, flexDirection: 'column' },
+  inlineFilesArea: { width: '100%', marginBottom: 6, paddingHorizontal: 4 },
+  filesScrollContainer: { flexDirection: 'row', gap: 6 },
+  filePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  fileNameText: { fontSize: 11, maxWidth: 140, fontWeight: '600' },
+  removeFileBtn: { marginLeft: 6, justifyContent: 'center' },
+  inputField: { width: '100%', height: 27, paddingHorizontal: 1, fontSize: 11 },
+  interactiveSubRow: { flexDirection: 'row', width: '100%', alignItems: 'center', marginTop: 2 },
+  attachButton: { width: 27, height: 27, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+  disabledAttachButton: { opacity: 0.75 },
+  requestSettings: { fontSize: 7, marginLeft: 6 },
+  submitSpacer: { flex: 1 },
+  sendButton: { width: 28, height: 28, borderRadius: 7, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  disabledSendButton: { opacity: 0.78 },
+  sendButtonText: { fontSize: 13, fontWeight: '500' }
 });
