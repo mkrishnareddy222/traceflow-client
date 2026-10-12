@@ -49,6 +49,7 @@ export const SidebarOptions: React.FC<SidebarProps> = ({
       </View>
 
       <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator>
+        <Text style={[styles.sectionTitle, { color: colors.muted, marginBottom: 12 }]}>APPEARANCE</Text>
         <Text style={[styles.inputLabel, { color: colors.muted }]}>Interface Mode</Text>
         <View style={[styles.themeSwitch, { backgroundColor: colors.panel, borderColor: colors.border }]}>
           {([
@@ -170,7 +171,7 @@ export const SidebarOptions: React.FC<SidebarProps> = ({
         <View style={styles.toggleRow}>
           <View style={styles.toggleTextContainer}>
             <Text style={[styles.toggleLabel, { color: colors.text }]}>RAG search engine</Text>
-            <Text style={[styles.toggleSubtitle, { color: colors.muted }]}>Inject private files into prompts</Text>
+            <Text style={[styles.toggleSubtitle, { color: colors.muted }]}>Ground answers in your files</Text>
           </View>
           <Switch
             trackColor={{ false: colors.border, true: '#10b981' }}

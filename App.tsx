@@ -15,26 +15,34 @@ import {
 import { useChatEngine } from './src/hooks/useChatEngine';
 import { SidebarOptions } from './src/components/SidebarOptions';
 import { DocumentUploadStage } from './src/components/DocumentUploadStage';
+import { RagProcessingStage } from './src/components/RagProcessingStage';
 import { ChatWorkspaceStage } from './src/components/ChatWorkspaceStage';
+import { WorkspaceTab } from './src/types/chat';
 
 export default function App() {
   const { 
-    messages, isTyping, ragProcessingStep, indexedFiles, 
+    messages, isTyping, ragProcessingStep, ragUploadError, currentUploadName,
+    uploadAttempts, failedUploadCount, successfulUploadCount, totalUploadDuration, indexedFiles,
     preferences, setPreferences, sendMessage, ingestFileWithProgress, clearActiveFilesContext, clearMessages
   } = useChatEngine();
   
   const scrollViewRef = useRef<ScrollView>(null);
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>('chat');
+  const hasExplicitThemeChoice = useRef(false);
   const isMobile = windowWidth < 768;
 
   const isDark = preferences.theme === 'dark';
   const slideAnim = useRef(new Animated.Value(-280)).current;
 
-  const isShowUploadWizard = preferences.ragEnabled && indexedFiles.length === 0 && ragProcessingStep !== 'SUCCESS';
-
   useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => setWindowWidth(window.width));
+    const sub = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowWidth(window.width);
+      if (!hasExplicitThemeChoice.current && Platform.OS === 'web') {
+        setPreferences(prev => ({ ...prev, theme: window.width < 768 ? 'light' : 'dark' }));
+      }
+    });
     return () => sub.remove();
   }, []);
 
@@ -65,7 +73,14 @@ export default function App() {
   }, [isDark]);
 
   const handleThemeMutation = (theme: 'light' | 'dark') => {
+    hasExplicitThemeChoice.current = true;
     setPreferences(prev => ({ ...prev, theme }));
+  };
+
+  const handleRagToggle = (enabled: boolean) => {
+    setPreferences(prev => ({ ...prev, ragEnabled: enabled }));
+    setActiveWorkspaceTab(enabled ? 'knowledge' : 'chat');
+    if (isMobile) setIsMobileMenuOpen(false);
   };
 
   const handleProviderMutation = (provider: 'groq' | 'openai' | 'gemini') => {
@@ -88,7 +103,7 @@ export default function App() {
       onTemperatureChange={(val) => setPreferences(prev => ({ ...prev, temperature: val }))}
       onMaxTokensChange={(val) => setPreferences(prev => ({ ...prev, maxTokens: val }))}
       onRememberToggle={(val) => setPreferences(prev => ({ ...prev, rememberConversation: val }))}
-      onRagToggle={(val) => setPreferences(prev => ({ ...prev, ragEnabled: val }))}
+      onRagToggle={handleRagToggle}
       isDark={isDark}
     />
   );
@@ -103,11 +118,38 @@ export default function App() {
             </View>
           )}
 
-          <View style={[styles.chatArea, isShowUploadWizard && styles.centerStage, { backgroundColor: isDark ? '#09090b' : '#ffffff' }]}>
-            {isShowUploadWizard ? (
+          <View style={[styles.chatArea, { backgroundColor: isDark ? '#09090b' : '#ffffff' }]}>
+            {preferences.ragEnabled && activeWorkspaceTab === 'knowledge' ? (
               <DocumentUploadStage 
-                preferences={preferences} setPreferences={setPreferences} 
-                ragProcessingStep={ragProcessingStep} ingestFileWithProgress={ingestFileWithProgress} isDark={isDark} 
+                preferences={preferences}
+                setPreferences={setPreferences}
+                ragProcessingStep={ragProcessingStep}
+                ragUploadError={ragUploadError}
+                indexedFiles={indexedFiles}
+                ingestFileWithProgress={ingestFileWithProgress}
+                provider={preferences.provider}
+                isMobile={isMobile}
+                isDark={isDark}
+                onToggleMenu={() => setIsMobileMenuOpen(open => !open)}
+                onNewChat={() => { clearMessages(); setActiveWorkspaceTab('chat'); }}
+                onTabChange={setActiveWorkspaceTab}
+              />
+            ) : preferences.ragEnabled && activeWorkspaceTab === 'processing' ? (
+              <RagProcessingStage
+                files={indexedFiles}
+                processingStep={ragProcessingStep}
+                currentFileName={currentUploadName}
+                uploadError={ragUploadError}
+                uploadAttempts={uploadAttempts}
+                failedUploadCount={failedUploadCount}
+                successfulUploadCount={successfulUploadCount}
+                totalUploadDuration={totalUploadDuration}
+                provider={preferences.ragProvider}
+                theme={preferences.theme}
+                isMobile={isMobile}
+                onToggleMenu={() => setIsMobileMenuOpen(open => !open)}
+                onNewChat={() => { clearMessages(); setActiveWorkspaceTab('chat'); }}
+                onTabChange={setActiveWorkspaceTab}
               />
             ) : (
               <ChatWorkspaceStage 
@@ -115,6 +157,8 @@ export default function App() {
                 sendMessage={sendMessage} onNewChat={clearMessages} ingestFileWithProgress={ingestFileWithProgress} isFileUploading={ragProcessingStep !== 'IDLE'}
                 provider={preferences.provider} theme={preferences.theme} ragEnabled={preferences.ragEnabled}
                 maxTokens={preferences.maxTokens} isMobile={isMobile} onToggleMenu={() => setIsMobileMenuOpen(open => !open)}
+                activeTab={activeWorkspaceTab}
+                onTabChange={setActiveWorkspaceTab}
                 windowWidth={windowWidth} scrollViewRef={scrollViewRef as any}
               />
             )}
@@ -153,5 +197,4 @@ const styles = StyleSheet.create({
   backdropTouch: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)' },
   mobileSidebar: { width: 280, maxWidth: '85%', height: '100%', borderRightWidth: 1, position: 'absolute', left: 0 },
   chatArea: { flex: 1, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, width: '100%' },
-  centerStage: { justifyContent: 'center', alignItems: 'center' }
 });

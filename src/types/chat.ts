@@ -19,7 +19,12 @@ export interface UploadedFile {
   id: string;
   name: string;
   size: string;
+  chunkCount?: number;
+  durationSeconds?: number;
+  uploadedAt?: string;
 }
+
+export type WorkspaceTab = 'knowledge' | 'processing' | 'chat';
 
 export type ProcessingStep = 'IDLE' | 'TRANSMITTING' | 'SPLITTING_CHUNKS' | 'EMBEDDING' | 'SUCCESS';
 

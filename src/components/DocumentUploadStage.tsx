@@ -1,174 +1,250 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
-import Slider from '@react-native-community/slider';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { ChatPreferences, ProcessingStep } from '../types/chat';
+import { ChatPreferences, ProcessingStep, UploadedFile, WorkspaceTab } from '../types/chat';
+import { HeaderBar } from './HeaderBar';
+import { RagIndexSettings } from './RagIndexSettings';
 
 interface UploadStageProps {
   preferences: ChatPreferences;
   setPreferences: React.Dispatch<React.SetStateAction<ChatPreferences>>;
   ragProcessingStep: ProcessingStep;
-  ingestFileWithProgress: (fileObj: any) => Promise<void>;
+  ragUploadError: string | null;
+  indexedFiles: UploadedFile[];
+  ingestFileWithProgress: (fileObj: { uri: string; name: string; type: string; blob?: Blob; size?: number }) => Promise<void>;
+  provider: string;
+  isMobile: boolean;
   isDark: boolean;
+  onToggleMenu: () => void;
+  onNewChat: () => void;
+  onTabChange: (tab: WorkspaceTab) => void;
 }
 
 export const DocumentUploadStage: React.FC<UploadStageProps> = ({
   preferences,
   setPreferences,
   ragProcessingStep,
+  ragUploadError,
+  indexedFiles,
   ingestFileWithProgress,
-  isDark
+  provider,
+  isMobile,
+  isDark,
+  onToggleMenu,
+  onNewChat,
+  onTabChange,
 }) => {
-  const ragProviders: Array<'cohere' | 'gemini'> = ['cohere', 'gemini'];
-
-  const stepLabels = {
-    TRANSMITTING: 'Uploading payload packet safely to server endpoints...',
-    SPLITTING_CHUNKS: `Splitting text structures (Size: ${preferences.chunkSize} / Overlap: ${preferences.chunkOverlap})...`,
-    EMBEDDING: `Serializing chunks onto Chroma vector databases via ${preferences.ragProvider.toUpperCase()}...`,
-    SUCCESS: 'Ingestion pipeline execution verified successfully! Opening chat...'
+  const colors = {
+    background: isDark ? '#090a0c' : '#ffffff',
+    panel: isDark ? '#101215' : '#f9fafb',
+    border: isDark ? '#24272c' : '#e4e4e7',
+    text: isDark ? '#f4f4f5' : '#18181b',
+    muted: isDark ? '#858991' : '#71717a',
+    faint: isDark ? '#50545c' : '#9ca3af',
   };
+  const embeddingLabel = preferences.ragProvider === 'gemini' ? 'Gemini' : 'Cohere';
+  const embeddingKey = preferences.apiTokens[preferences.ragProvider];
+  const knownChunkCount = indexedFiles.reduce((count, file) => count + (file.chunkCount ?? 0), 0);
+  const chunkCountLabel = indexedFiles.length === 0 ? '0' : knownChunkCount > 0 ? String(knownChunkCount) : '—';
+  const processing = ragProcessingStep !== 'IDLE';
 
   const handlePickDocument = async () => {
     try {
+      console.info('[RAG upload] Opening document picker');
       const pickerResult = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         copyToCacheDirectory: true,
       });
 
-      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) return;
+      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+        console.info('[RAG upload] Document selection canceled');
+        return;
+      }
       const selectedAsset = pickerResult.assets[0];
+      console.info('[RAG upload] Selected document', {
+        name: selectedAsset.name,
+        size: selectedAsset.size,
+        type: selectedAsset.mimeType,
+      });
 
       await ingestFileWithProgress({
         uri: selectedAsset.uri,
         name: selectedAsset.name,
         type: selectedAsset.mimeType || 'application/pdf',
-        blob: (selectedAsset as any).output?.[0] || selectedAsset
+        blob: selectedAsset.file,
+        size: selectedAsset.size,
       });
-    } catch (err) {
-      console.error('File selection issue:', err);
+    } catch (error) {
+      console.error('File selection issue:', error);
     }
   };
 
-  // 1. IN-PROGRESS LIFE-CYCLE SCREEN
-  if (ragProcessingStep !== 'IDLE') {
-    return (
-      <View style={styles.wizardInner}>
-        <ActivityIndicator size="large" color="#10b981" style={{ marginBottom: 20 }} />
-        <Text style={[styles.wizardHeader, { color: isDark ? '#ececf1' : '#0d0d0d' }]}>PROCESSING KNOWLEDGE STREAM</Text>
-        <Text style={[styles.wizardSubtitle, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>
-          {stepLabels[ragProcessingStep as keyof typeof stepLabels] || 'Processing file context...'}
-        </Text>
-        <View style={[styles.progressTrack, { backgroundColor: isDark ? '#1a1a1a' : '#eaeaea' }]}>
-          <View style={[
-            styles.progressBar, 
-            { 
-              width: ragProcessingStep === 'TRANSMITTING' ? '25%' : ragProcessingStep === 'SPLITTING_CHUNKS' ? '55%' : ragProcessingStep === 'EMBEDDING' ? '85%' : '100%',
-              backgroundColor: ragProcessingStep === 'SUCCESS' ? '#10b981' : '#6366f1' 
-            }
-          ]} />
-        </View>
-      </View>
-    );
-  }
-
-  // 2. ULTRA COMPACT CONFIGURATION CONTROL SHEET
   return (
-    <View style={[styles.setupCard, { backgroundColor: isDark ? '#171717' : '#f9f9f9', borderColor: isDark ? '#262626' : '#e5e5e5' }]}>
-      <Text style={[styles.mainTitle, { color: isDark ? '#ececf1' : '#0d0d0d' }]}>RAG Search Configuration</Text>
-      <Text style={styles.subtitle}>Specify vector segmentation boundaries and keys directly on-stage before index execution.</Text>
-      
-      {/* Grouped Parameters Layout Matrix */}
-      <View style={styles.parameterRow}>
-        <View style={styles.splitInputContainer}>
-          <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Embedder Model</Text>
-          <View style={styles.compactRow}>
-            {ragProviders.map((rp) => (
-              <TouchableOpacity 
-                key={rp} 
-                style={[styles.pillButton, preferences.ragProvider === rp && (isDark ? styles.pillActiveDark : styles.pillActiveLight)]}
-                onPress={() => setPreferences(prev => ({ ...prev, ragProvider: rp }))}
-              >
-                <Text style={[styles.pillText, { color: isDark ? '#a3a3a3' : '#4b5563' }, preferences.ragProvider === rp && { color: isDark ? '#0d0d0d' : '#ffffff', fontWeight: 'bold' }]}>
-                  {rp.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <HeaderBar
+        provider={provider}
+        isMobile={isMobile}
+        onToggleMenu={onToggleMenu}
+        onNewChat={onNewChat}
+        theme={preferences.theme}
+        activeTab="knowledge"
+        onTabChange={onTabChange}
+      />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, isMobile && styles.contentMobile, isMobile && styles.contentMobileBottom]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.pageHeading}>
+          <Text style={styles.eyebrow}>RAG WORKSPACE</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Knowledge base</Text>
+          <Text style={[styles.pageSubtitle, { color: colors.muted }]}>
+            Add and configure the sources used to ground TraceFlow responses.
+          </Text>
+        </View>
+
+        <View style={[styles.statsPanel, { backgroundColor: colors.panel, borderColor: colors.border }]}>
+          <View style={styles.stat}>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>SOURCES</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{indexedFiles.length}</Text>
+            <Text style={[styles.statCaption, { color: colors.faint }]}>Indexed documents</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.stat}>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>CHUNKS</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{chunkCountLabel}</Text>
+            <Text style={[styles.statCaption, { color: colors.faint }]}>Available for retrieval</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.stat}>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>EMBEDDING</Text>
+            <Text style={[styles.embeddingValue, { color: colors.text }]}>{embeddingLabel}</Text>
+            <Text style={[styles.statCaption, { color: colors.faint }]}>Active vector model</Text>
           </View>
         </View>
 
-        {/* Dynamic Key Fields encapsulated cleanly inside core layout card */}
-        {preferences.ragProvider === 'cohere' && (
-          <View style={styles.splitInputContainer}>
-            <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Cohere Security Key</Text>
-            <TextInput
-              style={[styles.tokenInput, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff', borderColor: isDark ? '#2d2d2d' : '#d5d5d5', color: isDark ? '#ececf1' : '#0d0d0d' }]}
-              placeholder="Enter Cohere Token"
-              placeholderTextColor={isDark ? '#444444' : '#b4b4b4'}
-              secureTextEntry={true}
-              value={preferences.apiTokens.cohere}
-              onChangeText={(txt) => setPreferences(prev => ({ ...prev, apiTokens: { ...prev.apiTokens, cohere: txt } }))}
+        <View style={[styles.dashboardColumns, isMobile && styles.dashboardColumnsMobile]}>
+          <View style={[styles.configPanel, { backgroundColor: colors.panel, borderColor: colors.border }]}>
+            <RagIndexSettings
+              preferences={preferences}
+              setPreferences={setPreferences}
+              isDark={isDark}
             />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ disabled: processing }}
+              onPress={handlePickDocument}
+              disabled={processing}
+              style={[styles.uploadButton, isMobile && styles.uploadButtonMobile, processing && styles.disabledUploadButton]}
+            >
+              {processing && <ActivityIndicator size="small" color="#071b14" style={styles.uploadSpinner} />}
+              {!processing && <Text style={styles.uploadIcon}>⇧</Text>}
+              <Text style={styles.uploadButtonText}>
+                {processing ? 'Indexing document…' : 'Upload & index document'}
+              </Text>
+            </TouchableOpacity>
+            {!embeddingKey && (
+              <Text style={[styles.apiKeyNotice, { color: colors.muted }]}>
+                An embedding API key may be required by your RAG server.
+              </Text>
+            )}
+            {ragUploadError && (
+              <Text accessibilityRole="alert" style={styles.uploadError}>{ragUploadError}</Text>
+            )}
           </View>
-        )}
-      </View>
 
-      {/* Compact Horizontal Slider Controls Grid Row */}
-      <View style={styles.slidersGrid}>
-        <View style={styles.sliderItem}>
-          <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Chunk Size: <Text style={styles.boldVal}>{preferences.chunkSize}</Text></Text>
-          <Slider
-            minimumValue={100}
-            maximumValue={1000}
-            step={50}
-            value={preferences.chunkSize}
-            onValueChange={(val) => setPreferences(prev => ({ ...prev, chunkSize: Math.round(val) }))}
-            minimumTrackTintColor="#10b981"
-            thumbTintColor="#10b981"
-          />
+          <View style={[styles.sourcesPanel, { backgroundColor: colors.panel, borderColor: colors.border }]}>
+            <View style={[styles.sourcesHeading, { borderBottomColor: colors.border }]}>
+              <View>
+                <Text style={[styles.sourcesTitle, { color: colors.text }]}>Indexed sources</Text>
+                <Text style={[styles.sourcesSubtitle, { color: colors.muted }]}>Documents currently available to retrieval</Text>
+              </View>
+              <View style={[styles.emptyBadge, { backgroundColor: isDark ? '#191c20' : '#f1f5f9' }]}>
+                <Text style={[styles.emptyBadgeText, { color: colors.muted }]}>
+                  {indexedFiles.length === 0 ? 'Empty' : indexedFiles.length}
+                </Text>
+              </View>
+            </View>
+            {indexedFiles.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIcon, { backgroundColor: isDark ? '#191c20' : '#f1f5f9' }]}>
+                  <Text style={[styles.emptyIconText, { color: colors.muted }]}>⇧</Text>
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>No knowledge sources yet</Text>
+                <Text style={[styles.emptyDescription, { color: colors.faint }]}>
+                  Upload a document to begin building your knowledge base.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.sourceList}>
+                {indexedFiles.map((file) => (
+                  <View key={file.id} style={[styles.sourceRow, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.sourceFileIcon, { backgroundColor: isDark ? '#17211e' : '#ecfdf5' }]}>
+                      <Text style={styles.sourceFileIconText}>▤</Text>
+                    </View>
+                    <View style={styles.sourceFileDetails}>
+                      <Text numberOfLines={1} style={[styles.sourceFileName, { color: colors.text }]}>{file.name}</Text>
+                      <Text style={[styles.sourceFileMeta, { color: colors.muted }]}>
+                        {file.size}{file.chunkCount !== undefined ? ` · ${file.chunkCount} chunks` : ''}
+                      </Text>
+                    </View>
+                    <Text style={styles.indexedStatus}>Indexed</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
-
-        <View style={styles.sliderItem}>
-          <Text style={[styles.inputLabel, { color: isDark ? '#a3a3a3' : '#4b5563' }]}>Chunk Overlap: <Text style={styles.boldVal}>{preferences.chunkOverlap}</Text></Text>
-          <Slider
-            minimumValue={50}
-            maximumValue={100}
-            step={5}
-            value={preferences.chunkOverlap}
-            onValueChange={(val) => setPreferences(prev => ({ ...prev, chunkOverlap: Math.round(val) }))}
-            minimumTrackTintColor="#10b981"
-            thumbTintColor="#10b981"
-          />
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.uploadButton} onPress={handlePickDocument}>
-        <Text style={styles.uploadButtonText}>➕ Select & Inject Documents</Text>
-      </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  setupCard: { width: '100%', maxWidth: 580, padding: 20, borderRadius: 12, borderWidth: 1 },
-  mainTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4, textAlign: 'center' },
-  subtitle: { color: '#737373', fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
-  parameterRow: { flexDirection: 'row', gap: 12, width: '100%', marginBottom: 12 },
-  splitInputContainer: { flex: 1 },
-  inputLabel: { fontSize: 11, fontWeight: '700', marginBottom: 6 },
-  boldVal: { color: '#10b981', fontWeight: '800' },
-  compactRow: { flexDirection: 'row', gap: 6, width: '100%' },
-  pillButton: { flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#2d2d2d', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a1a' },
-  pillActiveDark: { backgroundColor: '#e5e5e5', borderColor: '#e5e5e5' },
-  pillActiveLight: { backgroundColor: '#000000', borderColor: '#000000' },
-  pillText: { fontSize: 11 },
-  tokenInput: { width: '100%', height: 34, borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, fontSize: 12 },
-  slidersGrid: { flexDirection: 'column', gap: 10, width: '100%', marginTop: 6 },
-  sliderItem: { width: '100%' },
-  uploadButton: { marginTop: 20, width: '100%', height: 44, backgroundColor: '#10b981', borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  uploadButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
-  wizardInner: { width: '100%', maxWidth: 460, alignItems: 'center', alignSelf: 'center' },
-  wizardHeader: { fontSize: 12, fontWeight: '800', letterSpacing: 1.5, marginBottom: 6 },
-  wizardSubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  progressTrack: { width: '100%', height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressBar: { height: '100%', borderRadius: 3 }
+  screen: { flex: 1, width: '100%' },
+  scroll: { flex: 1, width: '100%' },
+  content: { width: '100%', maxWidth: 990, alignSelf: 'center', paddingTop: 42, paddingBottom: 32 },
+  contentMobile: { paddingHorizontal: 14, paddingTop: 20 },
+  contentMobileBottom: { paddingBottom: 52 },
+  pageHeading: { marginBottom: 22 },
+  eyebrow: { color: '#10b981', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: 9 },
+  pageTitle: { fontSize: 23, fontWeight: '700', letterSpacing: -0.6 },
+  pageSubtitle: { fontSize: 10, marginTop: 7 },
+  statsPanel: { minHeight: 91, borderWidth: 1, borderRadius: 11, flexDirection: 'row', alignItems: 'stretch', marginBottom: 14 },
+  stat: { flex: 1, justifyContent: 'center', paddingHorizontal: 17, paddingVertical: 12 },
+  statDivider: { width: 1, marginVertical: 1 },
+  statLabel: { fontSize: 7, fontWeight: '600', letterSpacing: 0.6 },
+  statValue: { fontSize: 16, fontWeight: '700', marginTop: 7 },
+  embeddingValue: { fontSize: 14, fontWeight: '700', marginTop: 8 },
+  statCaption: { fontSize: 7, marginTop: 5 },
+  dashboardColumns: { flexDirection: 'row', alignItems: 'stretch', gap: 14 },
+  dashboardColumnsMobile: { flexDirection: 'column' },
+  configPanel: { flex: 0.9, minWidth: 0, borderWidth: 1, borderRadius: 11, padding: 16 },
+  sourcesPanel: { flex: 1.2, minWidth: 0, borderWidth: 1, borderRadius: 11, overflow: 'hidden', minHeight: 340 },
+  sourcesHeading: { minHeight: 55, paddingHorizontal: 16, paddingVertical: 11, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1 },
+  sourcesTitle: { fontSize: 12, fontWeight: '700' },
+  sourcesSubtitle: { fontSize: 8, marginTop: 4 },
+  emptyBadge: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5 },
+  emptyBadgeText: { fontSize: 7 },
+  emptyState: { flex: 1, minHeight: 270, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  emptyIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
+  emptyIconText: { fontSize: 18 },
+  emptyTitle: { fontSize: 9, fontWeight: '700' },
+  emptyDescription: { fontSize: 8, textAlign: 'center', marginTop: 7 },
+  sourceList: { paddingHorizontal: 14 },
+  sourceRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
+  sourceFileIcon: { width: 31, height: 31, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  sourceFileIconText: { color: '#059669', fontSize: 13 },
+  sourceFileDetails: { flex: 1, minWidth: 0 },
+  sourceFileName: { fontSize: 10, fontWeight: '600' },
+  sourceFileMeta: { fontSize: 8, marginTop: 4 },
+  indexedStatus: { color: '#059669', fontSize: 8, fontWeight: '600', marginLeft: 9 },
+  uploadButton: { minHeight: 38, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f9f78', borderRadius: 20, marginTop: 18, paddingHorizontal: 10 },
+  uploadButtonMobile: { minHeight: 46, width: '100%', alignSelf: 'stretch', marginTop: 16, paddingHorizontal: 14 },
+  disabledUploadButton: { backgroundColor: '#0f9f78', opacity: 0.88 },
+  uploadSpinner: { marginRight: 7 },
+  uploadIcon: { color: '#061b14', fontSize: 13, fontWeight: '700', marginRight: 7 },
+  uploadButtonText: { color: '#061b14', fontSize: 9, fontWeight: '700', textAlign: 'center', flexShrink: 1 },
+  apiKeyNotice: { fontSize: 8, lineHeight: 12, marginTop: 7 },
+  uploadError: { color: '#dc2626', fontSize: 10, lineHeight: 15, marginTop: 10 },
 });

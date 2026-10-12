@@ -60,7 +60,7 @@ export const InputBar: React.FC<InputBarProps> = ({
       ]}>
         
         {/* FILE PILLS INLINE INSIDE CONTAINER TRACE */}
-        {ragEnabled && indexedFiles.length > 0 && (
+        {!ragEnabled && indexedFiles.length > 0 && (
           <View style={styles.inlineFilesArea}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filesScrollContainer}>
               {indexedFiles.map(file => (
@@ -79,7 +79,11 @@ export const InputBar: React.FC<InputBarProps> = ({
 
         <TextInput
           style={[styles.inputField, { color: isDark ? '#ececf1' : '#0d0d0d' }]}
-          placeholder={isFileUploading ? 'Structuring text indices...' : 'Message TraceFlow...'}
+          placeholder={isFileUploading
+            ? 'Structuring text indices...'
+            : ragEnabled
+              ? 'Ask your knowledge base...'
+              : 'Message TraceFlow...'}
           placeholderTextColor={isDark ? '#71717a' : '#a1a1aa'}
           value={localQuery}
           onChangeText={setLocalQuery}

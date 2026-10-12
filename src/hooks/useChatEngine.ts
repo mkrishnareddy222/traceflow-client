@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Platform } from 'react-native';
+import { Dimensions, Platform } from 'react-native';
 import { Message, ChatPreferences, UploadedFile, ProcessingStep, SourceMetadata } from '../types/chat';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -46,6 +46,63 @@ const readResponseSources = (response: unknown, content: string): SourceMetadata
   }).filter((source) => source.source.length > 0);
 };
 
+const readChunkCount = (value: unknown): number | undefined => {
+  if (Array.isArray(value)) {
+    const counts = value.map(readChunkCount).filter((count): count is number => count !== undefined);
+    return counts.length > 0 ? counts.reduce((total, count) => total + count, 0) : undefined;
+  }
+  if (!isRecord(value)) return undefined;
+
+  const countKeys = [
+    'chunk_count',
+    'chunkCount',
+    'total_chunks',
+    'totalChunks',
+    'chunks_count',
+    'chunksCount',
+    'chunks_created',
+    'chunks_processed',
+    'embedded_chunks',
+    'num_chunks',
+    'chunks',
+  ];
+  for (const key of countKeys) {
+    const count = value[key];
+    if (typeof count === 'number' && Number.isFinite(count) && count >= 0) return count;
+  }
+
+  if (Array.isArray(value.chunks)) return value.chunks.length;
+
+  for (const key of [
+    'data',
+    'result',
+    'results',
+    'documents',
+    'files',
+    'processed_files',
+    'uploaded_files',
+    'ingested_files',
+    'items',
+  ]) {
+    const nested = value[key];
+    if (Array.isArray(nested)) {
+      const counts = nested.map(readChunkCount).filter((count): count is number => count !== undefined);
+      if (counts.length > 0) return counts.reduce((total, count) => total + count, 0);
+    } else {
+      const count = readChunkCount(nested);
+      if (count !== undefined) return count;
+    }
+  }
+
+  return undefined;
+};
+
+const formatFileSize = (bytes?: number): string => {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return 'Uploaded';
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export function useChatEngine() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -53,32 +110,46 @@ export function useChatEngine() {
   // NEW LOGIC: Explicit layout pipeline stage controls
   const [ragProcessingStep, setRagProcessingStep] = useState<ProcessingStep>('IDLE');
   const [indexedFiles, setIndexedFiles] = useState<UploadedFile[]>([]);
+  const [ragUploadError, setRagUploadError] = useState<string | null>(null);
+  const [currentUploadName, setCurrentUploadName] = useState<string | null>(null);
+  const [uploadAttempts, setUploadAttempts] = useState(0);
+  const [failedUploadCount, setFailedUploadCount] = useState(0);
+  const [totalUploadDuration, setTotalUploadDuration] = useState(0);
+  const [successfulUploadCount, setSuccessfulUploadCount] = useState(0);
   const [sessionId] = useState(() => `session_${Date.now()}`);
 
-  const [preferences, setPreferences] = useState<ChatPreferences>({
-    provider: 'openai',
+  const [preferences, setPreferences] = useState<ChatPreferences>(() => ({
+    provider: 'gemini',
     temperature: 0.7,
-    maxTokens: 768,
+    maxTokens: 2048,
     rememberConversation: true,
-    theme: 'dark',
+    theme: Platform.OS !== 'web' || Dimensions.get('window').width < 768 ? 'light' : 'dark',
     ragEnabled: false,
     ragProvider: 'gemini',
     chunkSize: 500,     // Default server threshold matching rag.py
     chunkOverlap: 50,
     apiTokens: { groq: '', openai: '', gemini: '', cohere: '' }
-  });
+  }));
 
   const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const ingestFileWithProgress = async (fileObj: { uri: string; name: string; type: string, blob?: any }) => {
-    // Stage 1: Transmitting payload package
+  const ingestFileWithProgress = async (fileObj: {
+    uri: string;
+    name: string;
+    type: string;
+    blob?: Blob;
+    size?: number;
+  }) => {
+    setRagUploadError(null);
+    setCurrentUploadName(fileObj.name);
+    setUploadAttempts((attempts) => attempts + 1);
     setRagProcessingStep('TRANSMITTING');
-    await new Promise(r => setTimeout(r, 800));
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const startedAt = Date.now();
 
-    // Stage 2: Parsing & chunking text structures over backend slider weights
-    setRagProcessingStep('SPLITTING_CHUNKS');
-    
     try {
+      timeoutId = setTimeout(() => controller.abort(), 120_000);
       const formData = new FormData();
       formData.append('session_id', sessionId);
       formData.append('provider', preferences.ragProvider);
@@ -86,37 +157,102 @@ export function useChatEngine() {
       // Map sliders text settings onto Multi-part parameters lookup
       formData.append('chunk_size', preferences.chunkSize.toString());
       formData.append('chunk_overlap', preferences.chunkOverlap.toString());
+      const embeddingApiKey = preferences.apiTokens[preferences.ragProvider];
+      if (embeddingApiKey) formData.append('api_key', embeddingApiKey);
 
       if (Platform.OS === 'web') {
-        const res = await fetch(fileObj.uri);
-        const finalFileBlob = await res.blob();
+        const fileResponse = fileObj.blob ? null : await fetch(fileObj.uri, { signal: controller.signal });
+        if (fileResponse && !fileResponse.ok) {
+          throw new Error(`Could not read the selected document (${fileResponse.status}). Please select it again.`);
+        }
+        const finalFileBlob = fileObj.blob ?? await fileResponse!.blob();
         formData.append('files', finalFileBlob, fileObj.name);
       } else {
         formData.append('files', { uri: fileObj.uri, name: fileObj.name, type: fileObj.type } as any);
       }
 
-      const response = await fetch(`${BASE_URL}/api/rag/upload`, {
+      setRagProcessingStep('SPLITTING_CHUNKS');
+      const uploadUrl = `${BASE_URL}/api/rag/upload`;
+      console.info('[RAG upload] Sending request', {
+        method: 'POST',
+        url: uploadUrl,
+        fileName: fileObj.name,
+        provider: preferences.ragProvider,
+      });
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Accept': 'application/json' },
         body: formData,
+        signal: controller.signal,
+      });
+      console.info('[RAG upload] Response received', {
+        status: response.status,
+        ok: response.ok,
       });
 
-      if (!response.ok) throw new Error(`Upload failed code: ${response.status}`);
-      
-      // Stage 3: Vector indexing embedding processing loop
-      setRagProcessingStep('EMBEDDING');
-      await new Promise(r => setTimeout(r, 1200));
+      if (!response.ok) {
+        const responseText = await response.text();
+        let detail = responseText;
+        try {
+          const body: unknown = JSON.parse(responseText);
+          if (isRecord(body)) {
+            const message = body.detail ?? body.message ?? body.error;
+            if (typeof message === 'string') detail = message;
+          }
+        } catch {
+          // Keep the plain-text response as the backend error detail.
+        }
+        throw new Error(detail
+          ? `Upload failed (${response.status}): ${detail.slice(0, 300)}`
+          : `Upload failed (${response.status}).`);
+      }
 
-      // Stage 4: Ingestion loop verified
+      const responseText = await response.text();
+      let uploadResult: unknown;
+      if (responseText) {
+        try {
+          uploadResult = JSON.parse(responseText);
+        } catch {
+          console.warn('[RAG upload] Successful response was not JSON; chunk count is unavailable');
+        }
+      }
+      const durationSeconds = (Date.now() - startedAt) / 1000;
+      const chunkCount = readChunkCount(uploadResult);
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = undefined;
+      console.info('[RAG upload] Indexing complete', {
+        fileName: fileObj.name,
+        chunkCount: chunkCount ?? 'not returned by API',
+      });
       setRagProcessingStep('SUCCESS');
-      setIndexedFiles(prev => [...prev, { id: Date.now().toString(), name: fileObj.name, size: 'Synced' }]);
-      await new Promise(r => setTimeout(r, 800));
-      
+      setIndexedFiles((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-${fileObj.name}`,
+          name: fileObj.name,
+          size: formatFileSize(fileObj.size),
+          ...(chunkCount !== undefined && { chunkCount }),
+          durationSeconds,
+          uploadedAt: new Date().toISOString(),
+        },
+      ]);
+      setTotalUploadDuration((duration) => duration + durationSeconds);
+      setSuccessfulUploadCount((count) => count + 1);
     } catch (err) {
       console.error(err);
-      alert('Document ingestion pipeline encountered an unexpected validation failure.');
+      const message = err instanceof Error && err.name === 'AbortError'
+        ? 'Document upload timed out after 2 minutes. Check that the RAG API is running and reachable, then try again.'
+        : err instanceof TypeError
+          ? `Could not connect to the RAG API at ${BASE_URL}. Check that the server is running, the API URL is correct, and browser CORS is configured.`
+        : err instanceof Error
+          ? err.message
+          : 'Document upload failed for an unknown reason.';
+      setRagUploadError(message);
+      setFailedUploadCount((count) => count + 1);
     } finally {
-      setRagProcessingStep('IDLE'); // Restore default view boards state
+      if (timeoutId) clearTimeout(timeoutId);
+      setCurrentUploadName(null);
+      setRagProcessingStep('IDLE');
     }
   };
 
@@ -139,6 +275,8 @@ export function useChatEngine() {
         formData.append('provider', preferences.ragProvider);
         formData.append('temperature', preferences.temperature.toString());
         formData.append('max_tokens', preferences.maxTokens.toString());
+        const embeddingApiKey = preferences.apiTokens[preferences.ragProvider];
+        if (embeddingApiKey) formData.append('api_key', embeddingApiKey);
 
         response = await fetch(`${BASE_URL}/api/rag/query`, { method: 'POST', body: formData });
       } else {
@@ -196,6 +334,12 @@ export function useChatEngine() {
     messages, 
     isTyping, 
     ragProcessingStep, 
+    ragUploadError,
+    currentUploadName,
+    uploadAttempts,
+    failedUploadCount,
+    successfulUploadCount,
+    totalUploadDuration,
     indexedFiles, 
     preferences, 
     setPreferences, 
